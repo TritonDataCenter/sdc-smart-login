@@ -1,0 +1,296 @@
+? OpenSSH_5.8-p1-pubkey-plugin.patch
+Index: auth2-pubkey.c
+===================================================================
+RCS file: /cvs/openssh/auth2-pubkey.c,v
+retrieving revision 1.29
+diff -u -8 -p -r1.29 auth2-pubkey.c
+--- auth2-pubkey.c	1 Dec 2010 00:50:14 -0000	1.29
++++ auth2-pubkey.c	8 Feb 2011 23:40:55 -0000
+@@ -59,16 +59,20 @@
+ #include "authfile.h"
+ #include "match.h"
+ 
+ /* import */
+ extern ServerOptions options;
+ extern u_char *session_id2;
+ extern u_int session_id2_len;
+ 
++/* globals */
++static int pubkey_plugin_loaded = 0;
++static int (*plugin_user_key_allowed)(struct passwd *, RSA *, const char *);
++
+ static int
+ userauth_pubkey(Authctxt *authctxt)
+ {
+ 	Buffer b;
+ 	Key *key = NULL;
+ 	char *pkalg;
+ 	u_char *pkblob, *sig;
+ 	u_int alen, blen, slen;
+@@ -427,16 +431,76 @@ user_cert_trusted_ca(struct passwd *pw, 
+  out:
+ 	if (principals_file != NULL)
+ 		xfree(principals_file);
+ 	if (ca_fp != NULL)
+ 		xfree(ca_fp);
+ 	return ret;
+ }
+ 
++static int
++load_user_key_plugin()
++{
++	char *error = NULL;
++	void *handle = NULL;
++
++	if (pubkey_plugin_loaded > 0) return 1;
++	if (pubkey_plugin_loaded < 0) return 0;
++
++	handle = dlopen(options.pubkey_plugin, RTLD_NOW);
++	error = dlerror();
++	if(handle == NULL || error != NULL) {
++		debug("Unable to open library %s: %s", options.pubkey_plugin, error ? error : "");
++		pubkey_plugin_loaded = -1;
++		return 0;
++	}
++
++	dlerror();
++	plugin_user_key_allowed = dlsym(handle, "sshd_user_rsa_key_allowed"); 
++	error = dlerror();
++	if(handle == NULL || error != NULL) {
++ 		debug("Unable to resolve symbol sshd_user_key_allowed: %s", error ? error : "");
++		pubkey_plugin_loaded = -1;
++		return 0;
++	}
++
++	pubkey_plugin_loaded = 1;
++	return 1;
++}
++
++/* returns 1 on success */
++static int 
++user_key_allowed_from_plugin(struct passwd *pw, Key *key) 
++{
++	int success = 0;
++	char *fp = NULL;
++
++	if (options.pubkey_plugin == NULL) return 0;
++
++	success = load_user_key_plugin();
++	if(success != 1) return 0;
++
++	switch (key->type) {
++	case KEY_RSA1:
++	case KEY_RSA_CERT_V00:
++	case KEY_RSA_CERT:
++	case KEY_RSA:
++		fp = key_fingerprint(key, SSH_FP_MD5, SSH_FP_HEX);
++		success = (*plugin_user_key_allowed)(pw, key->rsa, fp);
++		xfree(fp);
++		debug("sshd_plugin returned: %d", success);
++		break;
++	default:
++		debug2("user_key_plugins only support RSA key resolution");
++	}
++  
++	return success;
++}
++
++
+ /* check whether given key is in .ssh/authorized_keys* */
+ int
+ user_key_allowed(struct passwd *pw, Key *key)
+ {
+ 	int success;
+ 	char *file;
+ 
+ 	if (auth_key_is_revoked(key))
+@@ -453,16 +517,23 @@ user_key_allowed(struct passwd *pw, Key 
+ 	xfree(file);
+ 	if (success)
+ 		return success;
+ 
+ 	/* try suffix "2" for backward compat, too */
+ 	file = authorized_keys_file2(pw);
+ 	success = user_key_allowed2(pw, key, file);
+ 	xfree(file);
++
++	if (success)
++		return success;
++       
++	/* try authorizing from a plugin if present */ 
++	success = user_key_allowed_from_plugin(pw, key);
++
+ 	return success;
+ }
+ 
+ Authmethod method_pubkey = {
+ 	"publickey",
+ 	userauth_pubkey,
+ 	&options.pubkey_authentication
+ };
+Index: servconf.c
+===================================================================
+RCS file: /cvs/openssh/servconf.c,v
+retrieving revision 1.209
+diff -u -8 -p -r1.209 servconf.c
+--- servconf.c	20 Nov 2010 04:19:38 -0000	1.209
++++ servconf.c	8 Feb 2011 23:40:55 -0000
+@@ -134,16 +134,17 @@ initialize_server_options(ServerOptions 
+ 	options->adm_forced_command = NULL;
+ 	options->chroot_directory = NULL;
+ 	options->zero_knowledge_password_authentication = -1;
+ 	options->revoked_keys_file = NULL;
+ 	options->trusted_user_ca_keys = NULL;
+ 	options->authorized_principals_file = NULL;
+ 	options->ip_qos_interactive = -1;
+ 	options->ip_qos_bulk = -1;
++	options->pubkey_plugin = NULL;
+ }
+ 
+ void
+ fill_default_server_options(ServerOptions *options)
+ {
+ 	/* Portable-specific options */
+ 	if (options->use_pam == -1)
+ 		options->use_pam = 0;
+@@ -322,17 +323,17 @@ typedef enum {
+ 	sBanner, sUseDNS, sHostbasedAuthentication,
+ 	sHostbasedUsesNameFromPacketOnly, sClientAliveInterval,
+ 	sClientAliveCountMax, sAuthorizedKeysFile, sAuthorizedKeysFile2,
+ 	sGssAuthentication, sGssCleanupCreds, sAcceptEnv, sPermitTunnel,
+ 	sMatch, sPermitOpen, sForceCommand, sChrootDirectory,
+ 	sUsePrivilegeSeparation, sAllowAgentForwarding,
+ 	sZeroKnowledgePasswordAuthentication, sHostCertificate,
+ 	sRevokedKeys, sTrustedUserCAKeys, sAuthorizedPrincipalsFile,
+-	sKexAlgorithms, sIPQoS,
++	sKexAlgorithms, sIPQoS, sPubKeyPlugin,
+ 	sDeprecated, sUnsupported
+ } ServerOpCodes;
+ 
+ #define SSHCFG_GLOBAL	0x01	/* allowed in main section of sshd_config */
+ #define SSHCFG_MATCH	0x02	/* allowed inside a Match section */
+ #define SSHCFG_ALL	(SSHCFG_GLOBAL|SSHCFG_MATCH)
+ 
+ /* Textual representation of the tokens. */
+@@ -447,16 +448,17 @@ static struct {
+ 	{ "forcecommand", sForceCommand, SSHCFG_ALL },
+ 	{ "chrootdirectory", sChrootDirectory, SSHCFG_ALL },
+ 	{ "hostcertificate", sHostCertificate, SSHCFG_GLOBAL },
+ 	{ "revokedkeys", sRevokedKeys, SSHCFG_ALL },
+ 	{ "trustedusercakeys", sTrustedUserCAKeys, SSHCFG_ALL },
+ 	{ "authorizedprincipalsfile", sAuthorizedPrincipalsFile, SSHCFG_ALL },
+ 	{ "kexalgorithms", sKexAlgorithms, SSHCFG_GLOBAL },
+ 	{ "ipqos", sIPQoS, SSHCFG_ALL },
++	{ "pubkeyplugin", sPubKeyPlugin, SSHCFG_ALL },
+ 	{ NULL, sBadOption, 0 }
+ };
+ 
+ static struct {
+ 	int val;
+ 	char *text;
+ } tunmode_desc[] = {
+ 	{ SSH_TUNMODE_NO, "no" },
+@@ -1393,16 +1395,20 @@ process_server_config_line(ServerOptions
+ 			fatal("%s line %d: Bad IPQoS value: %s",
+ 			    filename, linenum, arg);
+ 		if (*activep) {
+ 			options->ip_qos_interactive = value;
+ 			options->ip_qos_bulk = value2;
+ 		}
+ 		break;
+ 
++	case sPubKeyPlugin:
++                charptr = &options->pubkey_plugin;
++                goto parse_filename;
++
+ 	case sDeprecated:
+ 		logit("%s line %d: Deprecated option %s",
+ 		    filename, linenum, arg);
+ 		while (arg)
+ 		    arg = strdelim(&cp);
+ 		break;
+ 
+ 	case sUnsupported:
+@@ -1516,16 +1522,17 @@ copy_set_server_options(ServerOptions *d
+ 		return;
+ 	M_CP_STROPT(adm_forced_command);
+ 	M_CP_STROPT(chroot_directory);
+ 	M_CP_STROPT(trusted_user_ca_keys);
+ 	M_CP_STROPT(revoked_keys_file);
+ 	M_CP_STROPT(authorized_keys_file);
+ 	M_CP_STROPT(authorized_keys_file2);
+ 	M_CP_STROPT(authorized_principals_file);
++	M_CP_STROPT(pubkey_plugin);
+ }
+ 
+ #undef M_CP_INTOPT
+ #undef M_CP_STROPT
+ 
+ void
+ parse_server_config(ServerOptions *options, const char *filename, Buffer *conf,
+     const char *user, const char *host, const char *address)
+@@ -1771,11 +1778,13 @@ dump_config(ServerOptions *o)
+ 	for (i = 0; tunmode_desc[i].val != -1; i++)
+ 		if (tunmode_desc[i].val == o->permit_tun) {
+ 			s = tunmode_desc[i].text;
+ 			break;
+ 		}
+ 	dump_cfg_string(sPermitTunnel, s);
+ 
+ 	printf("ipqos 0x%02x 0x%02x\n", o->ip_qos_interactive, o->ip_qos_bulk);
++
++	dump_cfg_string(sPubKeyPlugin, o->pubkey_plugin);
+ 
+ 	channel_print_adm_permitted_opens();
+ }
+Index: servconf.h
+===================================================================
+RCS file: /cvs/openssh/servconf.h,v
+retrieving revision 1.87
+diff -u -8 -p -r1.87 servconf.h
+--- servconf.h	20 Nov 2010 04:19:38 -0000	1.87
++++ servconf.h	8 Feb 2011 23:40:55 -0000
+@@ -155,16 +155,17 @@ typedef struct {
+ 	int	permit_tun;
+ 
+ 	int	num_permitted_opens;
+ 
+ 	char   *chroot_directory;
+ 	char   *revoked_keys_file;
+ 	char   *trusted_user_ca_keys;
+ 	char   *authorized_principals_file;
++	char   *pubkey_plugin;
+ }       ServerOptions;
+ 
+ void	 initialize_server_options(ServerOptions *);
+ void	 fill_default_server_options(ServerOptions *);
+ int	 process_server_config_line(ServerOptions *, char *, const char *, int,
+ 	     int *, const char *, const char *, const char *);
+ void	 load_server_config(const char *, Buffer *);
+ void	 parse_server_config(ServerOptions *, const char *, Buffer *,
+Index: sshd_config
+===================================================================
+RCS file: /cvs/openssh/sshd_config,v
+retrieving revision 1.84
+diff -u -8 -p -r1.84 sshd_config
+--- sshd_config	10 Sep 2010 01:20:12 -0000	1.84
++++ sshd_config	8 Feb 2011 23:40:55 -0000
+@@ -41,16 +41,18 @@
+ #StrictModes yes
+ #MaxAuthTries 6
+ #MaxSessions 10
+ 
+ #RSAAuthentication yes
+ #PubkeyAuthentication yes
+ #AuthorizedKeysFile	.ssh/authorized_keys
+ 
++#PubKeyPlugin /usr/lib/libyoursshdplugin.so
++
+ # For this to work you will also need host keys in /etc/ssh/ssh_known_hosts
+ #RhostsRSAAuthentication no
+ # similar for protocol version 2
+ #HostbasedAuthentication no
+ # Change to yes if you don't trust ~/.ssh/known_hosts for
+ # RhostsRSAAuthentication and HostbasedAuthentication
+ #IgnoreUserKnownHosts no
+ # Don't read the user's ~/.rhosts and ~/.shosts files

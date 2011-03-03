@@ -18,7 +18,9 @@ AGENT_SRC = \
 	src/agent/server.c 	\
 	src/agent/config.c 	\
 	src/agent/zones.c
-AGENT_LIBS = -lzdoor -lzonecfg -lcurl -ldoor
+# ARG! Some versions of solaris have curl 3, some curl 4,
+# so pick up the specific version
+AGENT_LIBS = -lzdoor -lzonecfg /usr/lib/libcurl.so.4 -ldoor
 
 CLIENT := notify-${NAME}
 CLIENT_SRC = src/client/client.c

@@ -23,7 +23,7 @@ static const char *DOOR = "/var/tmp/._joyent_sshd_key_is_authorized";
 static const char *REQ_FMT_STR = "%s %d %s"; /* name uid fp */
 static const int RETURN_SZ = 2;
 
-static const int MAX_ATTEMPTS = 3;
+static const int MAX_ATTEMPTS = 2;
 static const int SLEEP_PERIOD = 1;
 
 int
@@ -32,7 +32,7 @@ sshd_user_rsa_key_allowed(struct passwd *pw, RSA *key, const char *fp)
 	int allowed = 0;
 	int fd = -1;
 	int blen = 0;
-	int attempt = 0;
+	int attempts = 0;
 	char *buf = NULL;
 	door_arg_t door_args = {0};
 
@@ -59,7 +59,7 @@ sshd_user_rsa_key_allowed(struct passwd *pw, RSA *key, const char *fp)
 	}
 	memset(door_args.rbuf, 0, RETURN_SZ);
 
-	while (attempt++ < MAX_ATTEMPTS) {
+	do {
 		fd = open(DOOR, O_RDWR);
 		if (fd < 0) {
 			perror("smartplugn: open (of door FD) failed");
@@ -71,11 +71,10 @@ sshd_user_rsa_key_allowed(struct passwd *pw, RSA *key, const char *fp)
 			munmap(door_args.rbuf, door_args.rsize);
 			break;
 		}
-		/* don't need exponential backoff here since this is just
-		   local RPC. basically we're just waiting to see if the
-		   other end restarted or not */
-		sleep(SLEEP_PERIOD);
-	}
+		if (++attempts < MAX_ATTEMPTS)
+			sleep(SLEEP_PERIOD);
+
+	} while (attempts < MAX_ATTEMPTS);
 
 	return (allowed);
 }

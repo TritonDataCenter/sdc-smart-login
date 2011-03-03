@@ -2,3 +2,4 @@ bin
 lib
 .npm
 *.tgz
+*.o

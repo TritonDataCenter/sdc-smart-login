@@ -1,5 +1,5 @@
 NAME=smartlogin
-TARBALL=${NAME}.tgz
+TARBALL=smart-login.tgz
 #VERSION=$(shell git describe)
 VERSION=0.1
 BASEDIR=/opt

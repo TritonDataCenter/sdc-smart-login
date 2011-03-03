@@ -1,12 +1,14 @@
+/* Copyright 2011 Joyent, Inc. */
 #include <alloca.h>
 #include <door.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <libzonecfg.h>
 #include <pthread.h>
-#include <stdio.h>
+#include <search.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <zdoor.h>
@@ -17,6 +19,15 @@
 #include <curl/types.h>
 #include <curl/easy.h>
 
+extern void *
+zonecfg_notify_bind(int(*func)(const char *zonename, zoneid_t zid,
+			const char *newstate, const char *oldstate,
+			hrtime_t when, void *p), void *p);
+
+
+extern void
+zonecfg_notify_unbind(void *handle);
+
 #define LOG_OOM() fprintf(stderr, "Out of Memory @%s:%u\n", __FILE__, __LINE__)
 
 static const char *DOOR_FILE = "/var/tmp/._joyent_smartlogin_new_zone";
@@ -25,6 +36,9 @@ static const char *POST_DATA = "fingerprint=%s&name=%s&uid=%d";
 static const char *KEY_SVC_NAME = "_joyent_sshd_key_is_authorized";
 
 static zdoor_handle_t g_zdoor_handle = 0;
+static void *g_zonecfg_handle = NULL;
+static void *g_zdoor_tree = NULL;
+static pthread_mutex_t g_zdoor_lock = PTHREAD_MUTEX_INITIALIZER;
 
 /* config.c */
 extern boolean_t read_config();
@@ -35,11 +49,24 @@ extern char *g_capi_ip;
 extern char **list_all_zones();
 extern char *get_owner_uuid(const char *);
 
+static int
+_tsearch_compare(const void *pa, const void *pb) {
+	const char *p1 = (const char *)pa;
+	const char *p2 = (const char *)pb;
+
+	if (p1 == NULL && p2 == NULL) return 0;
+	if (p1 != NULL && p2 == NULL) return 1;
+	if (p1 == NULL && p2 != NULL) return 11;
+
+	return (strcmp(p1, p2));
+}
+
+
 static size_t
 curl_callback(void *ptr, size_t size, size_t nmemb, void *data)
 {
 	/* We don't care about the body, so we just chuck it */
-	return size * nmemb;
+	return (size * nmemb);
 }
 
 static boolean_t
@@ -85,14 +112,15 @@ user_allowed_in_capi(const char *customer_uuid, const char *name, int uid,
 	curl_easy_setopt(handle, CURLOPT_POSTFIELDS, post_data);
 	res = curl_easy_perform(handle);
 	if (res != 0) {
-		fprintf(stderr, "curl returned %d:%s\n", res,
-		    curl_easy_strerror(res));
+		fprintf(stderr, "T%d: curl returned %d:%s\n", res,
+		    pthread_self(), curl_easy_strerror(res));
 	} else {
 		curl_easy_getinfo(handle, CURLINFO_RESPONSE_CODE, &http_code);
 		if (http_code == 201) {
 			allowed = B_TRUE;
 		} else {
-			fprintf(stderr, "CAPI wasn't happy: %ld\n", http_code);
+			fprintf(stderr, "T%d: CAPI returned non-201: %ld\n",
+			    pthread_self(), http_code);
 		}
 	}
 
@@ -100,6 +128,8 @@ user_allowed_in_capi(const char *customer_uuid, const char *name, int uid,
 	curl_easy_cleanup(handle);
 	return (allowed);
 }
+
+
 
 
 static zdoor_result_t *
@@ -141,19 +171,19 @@ _key_is_authorized(zdoor_cookie_t *cookie, char *argp, size_t argp_sz)
 			}
 			break;
 		default:
-			fprintf(stderr, "ERROR processing %s\n", rest);
+			fprintf(stderr, "ERROR processng %s\n", rest);
 			goto out;
 			break;
 		}
 		ptr = rest;
 	}
 
-	printf("T%d: login from zone=%s, customer=%s, user=%s, fp=%s\n",
+	fprintf(stderr, "T%d: login from zone=%s, owner=%s, user=%s, fp=%s\n",
 	    pthread_self(), cookie->zdc_zonename, (char *)cookie->zdc_biscuit,
 	    name, fp);
 	allowed =
 	    user_allowed_in_capi((char *)cookie->zdc_biscuit, name, uid, fp);
-	printf("T%d: login allowed?=%s\n", pthread_self(),
+	fprintf(stderr, "T%d: login allowed?=%s\n", pthread_self(),
 	    allowed ? "true" : "false");
 
 	result = (zdoor_result_t *)calloc(1, sizeof (zdoor_result_t));
@@ -179,7 +209,7 @@ out:
 		free(fp);
 		fp = NULL;
 	}
-	return result;
+	return (result);
 }
 
 
@@ -187,34 +217,71 @@ static boolean_t
 open_zdoor(const char *zone)
 {
 	char *owner = NULL;
+	char *entry = NULL;
 	if (zone == NULL)
 		return (B_FALSE);
+
+	pthread_mutex_lock(&g_zdoor_lock);
+	entry = tfind(zone, &g_zdoor_tree, _tsearch_compare);
+	pthread_mutex_unlock(&g_zdoor_lock);
+	if (entry != NULL) {
+		fprintf(stderr, "T%d: %s already has an open zdoor\n",
+		    pthread_self(), zone);
+		return (B_TRUE);
+	}
 
 	owner = get_owner_uuid(zone);
 	if (owner != NULL) {
 		if (zdoor_open(g_zdoor_handle, zone, KEY_SVC_NAME, owner,
 			_key_is_authorized) != ZDOOR_OK) {
-			fprintf(stderr, "Failed to open %s in %s\n",
-			    KEY_SVC_NAME, zone);
+			fprintf(stderr, "T%d: Failed to open %s in %s\n",
+			    pthread_self(), KEY_SVC_NAME, zone);
 			return (B_FALSE);
 		} else {
-			fprintf(stderr, "Opened %s in %s\n",
-			    KEY_SVC_NAME, zone);
+			fprintf(stderr, "T%d: Opened %s in %s\n",
+			    pthread_self(), KEY_SVC_NAME, zone);
+			pthread_mutex_lock(&g_zdoor_lock);
+			tsearch(zone, &g_zdoor_tree, _tsearch_compare);
+			pthread_mutex_unlock(&g_zdoor_lock);
 		}
 	}
 	return (B_TRUE);
 }
+
 
 static void
 _new_zone(void *cookie, char *argp, size_t arg_size, door_desc_t *dp,
 	uint_t n_desc)
 {
 	if (argp != NULL) {
-		printf("new zone(%s) created, calling zdoor_open\n", argp);
+		fprintf(stderr, "T%d: new_zone(%s) invoked (operator)\n",
+		    pthread_self(), argp);
 		open_zdoor(argp);
 	}
 	door_return(NULL, 0, NULL, 0);
 }
+
+
+/* Note that libzdoor maintains its own zone monitor, which will restart
+   any zdoors we've previously opened if this was a reboot.  We have this
+   solely to open zdoors in new zones.  We just let this silently fail */
+static int
+zone_monitor(const char *zonename, zoneid_t zid, const char *newstate,
+		const char *oldstate, hrtime_t when, void *p)
+{
+	if (strcmp("running", newstate) == 0) {
+		if (strcmp("ready", oldstate) == 0) {
+			fprintf(stderr,
+			    "T%d: zone %s now running...\n",
+			    pthread_self(), zonename);
+			open_zdoor(zonename);
+		}
+	}
+
+	return (0);
+}
+
+
 
 int
 main(int argc, char **argv)
@@ -227,10 +294,12 @@ main(int argc, char **argv)
 	char **zones = NULL;
 	void *cookie = NULL;
 
+	g_zonecfg_handle = zonecfg_notify_bind(zone_monitor, NULL);
+
 	curl_global_init(CURL_GLOBAL_ALL);
 
 	if (!read_config()) {
-		fprintf(stderr, "Unable to read config file!\n");
+		fprintf(stderr, "FATAL: Unable to read config file!\n");
 		exit(1);
 	}
 
@@ -241,11 +310,7 @@ main(int argc, char **argv)
 	}
 
 	zones = list_all_zones();
-	if(zones == NULL || zones[0] == NULL) {
-		fprintf(stderr, "FATAL: found no zones\n");
-		exit(1);
-	}
-	z = zones[0];
+	z = zones != NULL ? zones[0] : NULL;
 	while(z != NULL) {
 		open_zdoor(z);
 		z = zones[++i];
@@ -276,7 +341,6 @@ main(int argc, char **argv)
 	i = 0;
 	z = zones[0];
 	while(z != NULL) {
-		fprintf(stderr, "zone: %s\n", z);
 		cookie = zdoor_close(g_zdoor_handle, z, KEY_SVC_NAME);
 		if (cookie != NULL)
 			free(cookie);
@@ -286,6 +350,8 @@ main(int argc, char **argv)
 	free(zones);
 	zdoor_handle_destroy(g_zdoor_handle);
 	curl_global_cleanup();
+
+	zonecfg_notify_unbind(g_zonecfg_handle);
 
 	return 0;
 }

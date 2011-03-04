@@ -12,8 +12,8 @@ export VERSION=$npm_package_version
 source /lib/sdc/config.sh
 load_sdc_config
 echo "capi-ip=$CONFIG_capi_admin_ip" > $ETC_DIR/smartlogin.cfg
-echo "capi-login=$CONFIG_capi_admin_login" >> $ETC_DIR/smartlogin.cfg
-echo "capi-pw=$CONFIG_capi_admin_pw" >> $ETC_DIR/smartlogin.cfg
+echo "capi-login=$CONFIG_capi_http_admin_user" >> $ETC_DIR/smartlogin.cfg
+echo "capi-pw=$CONFIG_capi_http_admin_pw" >> $ETC_DIR/smartlogin.cfg
 
 subfile () {
   IN=$1

@@ -1,6 +1,6 @@
 NAME=smartlogin
 TARBALL=smart-login.tgz
-#VERSION=$(shell git describe)
+VERSION=$(shell git describe --tags)
 VERSION=0.1
 BASEDIR=/opt
 
@@ -8,10 +8,9 @@ ifeq ($(VERSION), "")
 	@echo "Use gmake"
 endif
 
-
 CC	= gcc
 CCFLAGS	= -fPIC -g -Wall
-LDFLAGS	=  -L/lib -L/usr/lib -static-libgcc
+LDFLAGS	= -L/lib -static-libgcc
 
 AGENT := ${NAME}
 AGENT_SRC = \
@@ -26,14 +25,9 @@ CLIENT := notify-${NAME}
 CLIENT_SRC = src/client/client.c
 CLIENT_LIBS = -ldoor
 
-PLUGIN := libsmartsshd.so
-PLUGIN_SRC = src/plugin/sshdplugin.c
-PLUGIN_LIBS = -lssl
-
 NPM_FILES =		\
 	bin		\
 	etc		\
-	lib		\
 	npm-scripts	\
 	package.json
 
@@ -49,13 +43,7 @@ ${CLIENT}:
 	mkdir -p bin
 	${CC} ${CCFLAGS} ${LDFLAGS} -o bin/$@ $^ ${CLIENT_SRC} ${CLIENT_LIBS}
 
-${PLUGIN}:
-	mkdir -p lib
-	${CC} ${CCFLAGS} -o ${PLUGIN_SRC:.c=.o} -c ${PLUGIN_SRC}
-	${CC} ${LDFLAGS} -shared -Wl,-soname,${LIB} -o lib/${PLUGIN} \
-		${PLUGIN_SRC:.c=.o} ${PLUGIN_LIBS}
-
-$(TARBALL): ${PLUGIN} ${CLIENT} ${AGENT} $(NPM_FILES)
+$(TARBALL): ${CLIENT} ${AGENT} $(NPM_FILES)
 	rm -fr .npm
 	mkdir -p .npm/$(NAME)/
 	cp -Pr $(NPM_FILES) .npm/$(NAME)/
@@ -64,7 +52,7 @@ $(TARBALL): ${PLUGIN} ${CLIENT} ${AGENT} $(NPM_FILES)
 npm: $(TARBALL)
 
 clean:
-	-rm -rf bin lib .npm core $~ ${TARBALL} ${AGENT}
+	-rm -rf bin .npm core $~ ${TARBALL} ${AGENT}
 	find . -name *.o | xargs rm -f
 
 distclean: clean

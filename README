@@ -4,15 +4,14 @@ What is this?
 Smart login is the set of components that enable SSHd on customer zones to
 resolve public keys in CAPI.
 
-The smart-login package contains 3 key items, plus some supporting scripts and
-files.  The essential pieces in here are:
-
-* agent: the smartlogin server that runs in the GZ, listening for SSH login
-   requests and forwarding them to CAPI.
-* plugin: the SSHd plugin that lives in customer zones, forwarding to previously
-   mentioned agent.
-* client: used by provisioner to "poke" the agent whenever new customer zones
-   are provisioned, such that a zdoor is opened for it.
-
 The agent/client are installed along with other agents, the plugin is included
 as part of dataset packaging.
+
+A few key tidbites:
+
+- The client is for troubleshooting/manual intervention only
+- The agent assumes the OS has libzdoor and libsmartsshd laid down
+- The SMF service makes zones a dependent of this package
+
+For more information: https://hub.joyent.com/wiki/display/dev/SmartLogin
+

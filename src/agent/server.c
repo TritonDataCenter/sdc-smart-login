@@ -19,6 +19,8 @@
 #include <curl/types.h>
 #include <curl/easy.h>
 
+#include "cache.h"
+
 extern void *
 zonecfg_notify_bind(int(*func)(const char *zonename, zoneid_t zid,
 			const char *newstate, const char *oldstate,
@@ -39,11 +41,15 @@ static zdoor_handle_t g_zdoor_handle = 0;
 static void *g_zonecfg_handle = NULL;
 static void *g_zdoor_tree = NULL;
 static pthread_mutex_t g_zdoor_lock = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t g_cache_lock = PTHREAD_MUTEX_INITIALIZER;
+static slc_handle_t *g_cache_handle = NULL;
 
 /* config.c */
 extern boolean_t read_config();
 extern char *g_capi_userpass;
 extern char *g_capi_ip;
+extern int g_capi_cache_size;
+extern int g_capi_cache_age;
 
 /* zone.c */
 extern char **list_all_zones();
@@ -80,12 +86,32 @@ user_allowed_in_capi(const char *customer_uuid, const char *name, int uid,
 	CURL *handle = NULL;
 	CURLcode res = 0;
 	long http_code = 0;
+	slc_entry_t *entry = NULL;
+	time_t now = 0;
+
+	pthread_mutex_lock(&g_cache_lock);
 
 	handle = curl_easy_init();
 	if (handle == NULL) {
 		LOG_OOM();
 		fprintf(stderr, "unable to get CURL handle\n");
 		goto out;
+	}
+
+	entry = slc_get_entry(g_cache_handle, customer_uuid, fp, uid);
+	if (entry != NULL) {
+		now = time(NULL);
+		allowed = entry->slc_is_allowed;
+		fprintf(stderr, "T%d: cache hit %d\n", pthread_self(), allowed);
+		if ((now - entry->slc_ctime) >= g_capi_cache_age) {
+			fprintf(stderr,
+				"T%d: cache entry expired, checking CAPI\n",
+				pthread_self());
+		} else {
+			goto out;
+		}
+	} else {
+		fprintf(stderr, "T%d: cache miss\n", pthread_self());
 	}
 
 	buf_len = snprintf(NULL, 0, CAPI_URI, g_capi_ip, customer_uuid) + 1;
@@ -122,9 +148,24 @@ user_allowed_in_capi(const char *customer_uuid, const char *name, int uid,
 			fprintf(stderr, "T%d: CAPI returned non-201: %ld\n",
 			    pthread_self(), http_code);
 		}
+		if (entry != NULL) {
+			slc_del_entry(g_cache_handle, entry);
+			slc_entry_free(entry);
+			entry = NULL;
+		}
+		entry = slc_entry_create(customer_uuid, fp, uid, allowed);
+		if (entry != NULL) {
+			if (!slc_add_entry(g_cache_handle, entry)) {
+				fprintf(stderr,
+					"T%d: Unable to cache response\n",
+					pthread_self());
+				slc_entry_free(entry);
+			}
+		}
 	}
 
   out:
+	pthread_mutex_unlock(&g_cache_lock);
 	curl_easy_cleanup(handle);
 	return (allowed);
 }
@@ -303,6 +344,12 @@ main(int argc, char **argv)
 		exit(1);
 	}
 
+	g_cache_handle = slc_handle_init(g_capi_cache_size);
+	if (g_cache_handle == NULL) {
+		fprintf(stderr, "FATAL: slc_handle_init failed\n");
+		exit(1);
+	}
+
 	g_zdoor_handle = zdoor_handle_init();
 	if (g_zdoor_handle == NULL) {
 		fprintf(stderr, "FATAL: zdoor_handle_init failed\n");
@@ -348,6 +395,7 @@ main(int argc, char **argv)
 		z = zones[++i];
 	}
 	free(zones);
+	slc_handle_destroy(g_cache_handle);
 	zdoor_handle_destroy(g_zdoor_handle);
 	curl_global_cleanup();
 

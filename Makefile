@@ -14,8 +14,9 @@ LDFLAGS	= -L/lib -static-libgcc
 
 AGENT := ${NAME}
 AGENT_SRC = \
-	src/agent/server.c 	\
+	src/agent/cache.c 	\
 	src/agent/config.c 	\
+	src/agent/server.c 	\
 	src/agent/zones.c
 # ARG! Some versions of solaris have curl 3, some curl 4,
 # so pick up the specific version

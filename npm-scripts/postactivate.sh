@@ -17,7 +17,11 @@ then
     echo "capi-ip=$CONFIG_capi_admin_ip" > $CFG_FILE
     echo "capi-login=$CONFIG_capi_http_admin_user" >> $CFG_FILE
     echo "capi-pw=$CONFIG_capi_http_admin_pw" >> $CFG_FILE
-    # Set a default TTL of 10m for 1k entries
+    echo "capi-connect-timeout=1" >> $CFG_FILE
+    echo "capi-timeout=3" >> $CFG_FILE
+    echo "capi-retry-attempts=3" >> $CFG_FILE
+    echo "capi-retry-sleep=1" >> $CFG_FILE
+    echo "capi-recheck-denies=yes" >> $CFG_FILE
     echo "capi-cache-size=1000" >> $CFG_FILE
     echo "capi-cache-age=600" >> $CFG_FILE
 fi

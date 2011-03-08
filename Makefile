@@ -16,6 +16,7 @@ AGENT := ${NAME}
 AGENT_SRC = \
 	src/agent/cache.c 	\
 	src/agent/config.c 	\
+	src/agent/log.c		\
 	src/agent/server.c 	\
 	src/agent/zones.c
 # ARG! Some versions of solaris have curl 3, some curl 4,

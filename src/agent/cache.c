@@ -5,14 +5,13 @@
 #include <time.h>
 
 #include "cache.h"
-
-#define LOG_OOM() fprintf(stderr, "Out of Memory @%s:%u\n", __FILE__, __LINE__)
+#include "log.h"
 
 static char *
 build_key(const char *uuid, int uid, const char *fp)
 {
 	char *key = NULL;
-	int buf_len = NULL;
+	int buf_len = 0;
 
 	buf_len = snprintf(NULL, 0, "%s%d%s", uuid, uid, fp) + 1;
 
@@ -68,6 +67,7 @@ slc_handle_t *
 slc_handle_init(int size)
 {
 	slc_handle_t *handle = NULL;
+	debug("slc_handle_init: size=%d\n", size);
 
 	handle = (slc_handle_t *)calloc(1, sizeof (slc_handle_t));
 	if (handle == NULL) {
@@ -75,6 +75,7 @@ slc_handle_init(int size)
 		return (NULL);
 	}
 	handle->slc_max_size = size;
+	debug("slc_handle_init: returning handle=%p\n", handle);
 	return (handle);
 }
 
@@ -83,7 +84,7 @@ slc_handle_destroy(slc_handle_t *handle)
 {
 	if (handle == NULL)
 		return;
-
+	debug("slc_handle_destroy: handle=%p\n", handle);
 	free(handle);
 }
 
@@ -94,10 +95,11 @@ slc_entry_create(const char *uuid, const char *fp, int uid, boolean_t allowed)
 	slc_entry_t *entry = NULL;
 
 	if (uuid == NULL || fp == NULL) {
-		fprintf(stderr, "slc_entry_create: NULL arguments\n");
+		debug("slc_entry_create: NULL arguments\n");
 		return (NULL);
 	}
-
+	debug("slc_entry_create: uuid=%s, fp=%s, uid=%d, allowed=%d\n",
+	      uuid, fp, uid, allowed);
 	entry = (slc_entry_t *)calloc(1, sizeof (slc_entry_t));
 	if (entry == NULL) {
 		LOG_OOM();
@@ -128,7 +130,7 @@ slc_entry_create(const char *uuid, const char *fp, int uid, boolean_t allowed)
 	entry->slc_ctime = time(NULL);
 	entry->slc_prev = NULL;
 	entry->slc_next = NULL;
-
+	debug("slc_entry_create: returning entry=%p\n", entry);
 	return (entry);
 }
 
@@ -137,7 +139,7 @@ slc_entry_free(slc_entry_t *entry)
 {
 	if (entry == NULL)
 		return;
-
+	debug("slc_entry_free: entry=%p\n", entry);
 	if (entry->slc_hash_key != NULL) {
 		free(entry->slc_hash_key);
 		entry->slc_hash_key = NULL;
@@ -162,15 +164,16 @@ slc_add_entry(slc_handle_t *handle, slc_entry_t *e)
 {
 	slc_key_t *key = NULL;
 	slc_entry_t *tmp = NULL;
+
 	if (handle == NULL || e == NULL) {
-		fprintf(stderr, "slc_add_entry: NULL arguments\n");
+		debug("slc_add_entry: NULL arguments\n");
 		return (B_FALSE);
 	}
+	debug("slc_add_entry: handle=%p, entry=%p\n", handle, e);
 
 	HASH_FIND_STR(handle->slc_table, e->slc_hash_key, key);
 	if (key != NULL) {
-		fprintf(stderr, "T%d: %s already in the cache, not adding:\n",
-			pthread_self(), e->slc_hash_key);
+		debug("%s already in the cache (skip):\n", e->slc_hash_key);
 		return (B_FALSE);
 	}
 
@@ -178,22 +181,29 @@ slc_add_entry(slc_handle_t *handle, slc_entry_t *e)
 	HASH_ADD_KEYPTR(hh, handle->slc_table, key->key, strlen(key->key), key);
 
 	if (handle->slc_head != NULL) {
+		debug("list isn't null, making this new head\n");
 		handle->slc_head->slc_prev = e;
 		e->slc_next = handle->slc_head;
 		handle->slc_head = e;
 	} else {
+		debug("list is null, making this new head and tail\n");
 		handle->slc_head = e;
 		handle->slc_tail = e;
 	}
 
 	if (++handle->slc_current_size > handle->slc_max_size) {
+		debug("cache size %d exceeds max(%d)\n",
+		      handle->slc_current_size, handle->slc_max_size);
 		tmp = handle->slc_tail;
 		if (tmp != NULL) {
+			debug("evicting %p\n", tmp);
 			slc_del_entry(handle, tmp);
 			slc_entry_free(tmp);
+		} else {
+			error("tried to evict, but tail was NULL\n");
 		}
 	}
-	fprintf(stderr, "T%d: slc_add_entry added: %p\n", pthread_self(), e);
+	debug("slc_add_entry added: %p\n", e);
 	return (B_TRUE);
 }
 
@@ -203,10 +213,13 @@ slc_get_entry(slc_handle_t *handle, const char *uuid, const char *fp, int uid)
 	char *tmp = NULL;
 	slc_key_t *key = NULL;
 	slc_entry_t *e = NULL;
+
 	if (handle == NULL || uuid == NULL || fp == NULL) {
-		fprintf(stderr, "slc_get_entry: NULL arguments\n");
+		debug("slc_get_entry: NULL arguments\n");
 		return (NULL);
 	}
+	debug("slc_get_entry: handle=%p, uuid=%s, fp=%s, uid=%d\n",
+	      handle, uuid, fp, uid);
 
 	tmp = build_key(uuid, uid, fp);
 	if (tmp == NULL)
@@ -226,7 +239,7 @@ slc_get_entry(slc_handle_t *handle, const char *uuid, const char *fp, int uid)
 		e->slc_prev = NULL;
 		handle->slc_head = e;
 	}
-	fprintf(stderr, "T%d: slc_get_entry got: %p\n", pthread_self(), e);
+	debug("slc_get_entry got: %p\n", e);
 	return (e);
 }
 
@@ -238,10 +251,11 @@ slc_del_entry(slc_handle_t *handle, slc_entry_t *e)
 	if (handle == NULL || e == NULL)
 		return;
 
+	debug("slc_del_entry: handle=%p, entry=%p\n", handle, e);
+
 	HASH_FIND_STR(handle->slc_table, e->slc_hash_key, key);
 	if (key == NULL) {
-		fprintf(stderr, "T%d: %s was not in cache, unable to delete\n",
-			pthread_self(), e->slc_hash_key);
+		debug("%s was not in cache\n", e->slc_hash_key);
 		return;
 	}
 
@@ -260,5 +274,5 @@ slc_del_entry(slc_handle_t *handle, slc_entry_t *e)
 	if (handle->slc_head == e) {
 		handle->slc_head = e->slc_next;
 	}
-	fprintf(stderr, "T%d: slc_del_entry deleted: %p\n", pthread_self(), e);
+	debug("slc_del_entry deleted: %p\n", e);
 }

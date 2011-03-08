@@ -1,3 +1,4 @@
+/* Copyright 2011 Joyent, Inc. */
 #include <errno.h>
 #include <libzonecfg.h>
 #include <stdio.h>
@@ -5,11 +6,12 @@
 #include <string.h>
 #include <zone.h>
 
+#include "log.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#define LOG_OOM() fprintf(stderr, "Out of Memory @%s:%u\n", __FILE__, __LINE__)
 
 char **
 list_all_zones()
@@ -50,8 +52,8 @@ list_all_zones()
 			continue;
 
 		if (getzonenamebyid(zids[i], buf, ZONENAME_MAX) < 0) {
-			fprintf(stderr, "getzonename for %ld failed: %s\n",
-					zids[i], strerror(errno));
+			error("getzonename for %ld failed: %s\n", zids[i],
+			      strerror(errno));
 		}
 
 		zones[j] = strdup(buf);
@@ -76,12 +78,12 @@ get_owner_uuid(const char *zone)
 	handle = zonecfg_init_handle();
 
 	if ((err = zonecfg_get_handle(zone, handle)) != Z_OK) {
-		fprintf(stderr, "FATAL: Unable to init zonecfg handle\n");
+		error("Unable to init zonecfg handle\n");
 		exit(1);
 	}
 
 	if ((err = zonecfg_setattrent(handle)) != Z_OK) {
-		fprintf(stderr, "ERROR: %s\n", zonecfg_strerror(err));
+		error("zonecfg_setattrent: %s\n", zonecfg_strerror(err));
 		exit(1);
         }
         while ((err = zonecfg_getattrent(handle, &attrtab)) == Z_OK) {
@@ -89,9 +91,8 @@ get_owner_uuid(const char *zone)
 			continue;
 
 		if (strcasecmp("string", attrtab.zone_attr_type) != 0) {
-			fprintf(stderr,
-			    "ERROR: zone_attr %s is of type %s (not string)\n",
-			    attrtab.zone_attr_name, attrtab.zone_attr_type);
+			error("zone_attr %s is of type %s (not string)\n",
+			      attrtab.zone_attr_name, attrtab.zone_attr_type);
 			continue;
 		}
 

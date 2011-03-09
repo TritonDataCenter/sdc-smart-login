@@ -288,21 +288,21 @@ out:
 static void
 close_zdoor(const char *zone)
 {
-	char *entry = NULL;
+	char **entry = NULL;
 	char *owner = NULL;
 	if (zone == NULL)
 		return;
 
 	pthread_mutex_lock(&g_zdoor_lock);
-	entry = *(char **)tfind(zone, &g_zdoor_tree, _tsearch_compare);
-	if (entry != NULL) {
+	entry = (char **)tfind(zone, &g_zdoor_tree, _tsearch_compare);
+	if (entry != NULL && *entry != NULL) {
 		owner = zdoor_close(g_zdoor_handle, zone, KEY_SVC_NAME);
 		if (owner != NULL) {
 			free(owner);
 			owner = NULL;
 		}
-		tdelete(entry, &g_zdoor_tree, _tsearch_compare);
-		free(entry);
+		tdelete(*entry, &g_zdoor_tree, _tsearch_compare);
+		free(*entry);
 		entry = NULL;
 	}
 	pthread_mutex_unlock(&g_zdoor_lock);

@@ -285,10 +285,33 @@ out:
 	return (result);
 }
 
+static void
+close_zdoor(const char *zone)
+{
+	char *entry = NULL;
+	char *owner = NULL;
+	if (zone == NULL)
+		return;
+
+	pthread_mutex_lock(&g_zdoor_lock);
+	entry = *(char **)tfind(zone, &g_zdoor_tree, _tsearch_compare);
+	if (entry != NULL) {
+		owner = zdoor_close(g_zdoor_handle, zone, KEY_SVC_NAME);
+		if (owner != NULL) {
+			free(owner);
+			owner = NULL;
+		}
+		tdelete(entry, &g_zdoor_tree, _tsearch_compare);
+		free(entry);
+		entry = NULL;
+	}
+	pthread_mutex_unlock(&g_zdoor_lock);
+}
 
 static boolean_t
 open_zdoor(const char *zone)
 {
+	boolean_t success = B_FALSE;
 	char *owner = NULL;
 	char *entry = NULL;
 	if (zone == NULL)
@@ -296,10 +319,11 @@ open_zdoor(const char *zone)
 
 	pthread_mutex_lock(&g_zdoor_lock);
 	entry = tfind(zone, &g_zdoor_tree, _tsearch_compare);
-	pthread_mutex_unlock(&g_zdoor_lock);
+
 	if (entry != NULL) {
 		debug("%s already has an open zdoor\n", zone);
-		return (B_TRUE);
+		success = B_TRUE;
+		goto out;
 	}
 
 	owner = get_owner_uuid(zone);
@@ -307,15 +331,23 @@ open_zdoor(const char *zone)
 		if (zdoor_open(g_zdoor_handle, zone, KEY_SVC_NAME, owner,
 			_key_is_authorized) != ZDOOR_OK) {
 			debug("Failed to open %s in %s\n", KEY_SVC_NAME, zone);
-			return (B_FALSE);
+			goto out;
 		} else {
 			debug("Opened %s in %s\n", KEY_SVC_NAME, zone);
-			pthread_mutex_lock(&g_zdoor_lock);
-			tsearch(zone, &g_zdoor_tree, _tsearch_compare);
-			pthread_mutex_unlock(&g_zdoor_lock);
+			entry = strdup(zone);
+			if (entry == NULL) {
+				LOG_OOM();
+				zdoor_close(g_zdoor_handle, zone, KEY_SVC_NAME);
+				free(owner);
+				goto out;
+			}
+			tsearch(entry, &g_zdoor_tree, _tsearch_compare);
+			success = B_TRUE;
 		}
 	}
-	return (B_TRUE);
+  out:
+	pthread_mutex_unlock(&g_zdoor_lock);
+	return (success);
 }
 
 
@@ -342,6 +374,11 @@ zone_monitor(const char *zonename, zoneid_t zid, const char *newstate,
 		if (strcmp("ready", oldstate) == 0) {
 			debug("zone %s now running...\n", zonename);
 			open_zdoor(zonename);
+		}
+	} else if (strcmp("shutting_down", newstate) == 0) {
+		if (strcmp("running", oldstate) == 0) {
+			debug("zone %s shutting down...\n", zonename);
+			close_zdoor(zonename);
 		}
 	}
 

@@ -1,199 +1,205 @@
 /* Copyright 2011 Joyent, Inc. */
-#include <alloca.h>
-#include <door.h>
 #include <errno.h>
 #include <fcntl.h>
-#include <libzonecfg.h>
 #include <pthread.h>
-#include <search.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <zdoor.h>
-#include <zone.h>
+
 #include <unistd.h>
 
 #include <curl/curl.h>
 #include <curl/types.h>
-#include <curl/easy.h>
 
-#include "cache.h"
+#include "capi.h"
 #include "config.h"
 #include "log.h"
+#include "lru.h"
+#include "util.h"
+#include "zutil.h"
 
-extern void *
-zonecfg_notify_bind(int(*func)(const char *zonename, zoneid_t zid,
-			const char *newstate, const char *oldstate,
-			hrtime_t when, void *p), void *p);
-
-
-extern void
-zonecfg_notify_unbind(void *handle);
-
-
-static const char *DOOR_FILE = "/var/tmp/._joyent_smartlogin_new_zone";
-static const char *CAPI_URI = "http://%s:8080/customers/%s/ssh_sessions";
-static const char *POST_DATA = "fingerprint=%s&name=%s&uid=%d";
+/* Our static variables */
 static const char *KEY_SVC_NAME = "_joyent_sshd_key_is_authorized";
+static const char *CFGFILE_ENV_VAR = "SMARTLOGIN_CONFIG";
 
-static zdoor_handle_t g_zdoor_handle = 0;
-static void *g_zonecfg_handle = NULL;
-static void *g_zdoor_tree = NULL;
-static pthread_mutex_t g_zdoor_lock = PTHREAD_MUTEX_INITIALIZER;
+/* Global handles */
+static capi_handle_t *g_capi_handle = NULL;
+static lru_cache_t *g_lru_cache = NULL;
+static boolean_t g_recheck_denies = B_TRUE;
+static unsigned int g_cache_age = 600;
 static pthread_mutex_t g_cache_lock = PTHREAD_MUTEX_INITIALIZER;
-static slc_handle_t *g_cache_handle = NULL;
 
+typedef struct cache_entry {
+	boolean_t allowed;
+	time_t ctime;
+} cache_entry_t;
 
-/* zone.c */
-extern char **list_all_zones();
-extern char *get_owner_uuid(const char *);
-
-static long
-get_system_us() {
-	struct timeval tp = {0};
-	gettimeofday(&tp, NULL);
-	return tp.tv_usec;
-}
-
-
-static int
-_tsearch_compare(const void *pa, const void *pb) {
-	const char *p1 = (const char *)pa;
-	const char *p2 = (const char *)pb;
-
-	if (p1 == NULL && p2 == NULL) return 0;
-	if (p1 != NULL && p2 == NULL) return 1;
-	if (p1 == NULL && p2 != NULL) return 11;
-
-	return (strcmp(p1, p2));
-}
-
-
-static size_t
-curl_callback(void *ptr, size_t size, size_t nmemb, void *data)
+static char *
+build_cache_key(const char *uuid, const char *user, const char *fp)
 {
-	/* We don't care about the body, so we just chuck it */
-	return (size * nmemb);
+	char *buf = NULL;
+	int len = 0;
+
+	len = snprintf(NULL, 0, "%s|%s|%s", uuid, user, fp) + 1;
+	buf = xmalloc(len);
+	if (buf == NULL)
+		return NULL;
+
+	snprintf(buf, len, "%s|%s|%s", uuid, user, fp);
+	return buf;
 }
 
-static boolean_t
-user_allowed_in_capi(const char *customer_uuid, const char *name, int uid,
-			const char *fp)
+static void
+build_lru_cache_from_config(const char *file)
 {
-	boolean_t allowed = B_FALSE;
-	char *post_data = NULL;
-	char *url = NULL;
-	int buf_len = 0;
-	CURL *handle = NULL;
-	CURLcode res = 0;
-	long http_code = 0;
-	slc_entry_t *entry = NULL;
-	time_t now = 0;
-	int attempts = 0;
-	long start = 0;
-	long end = 0;
+
+	char *cache_size = NULL;
+	char *cache_age = NULL;
+	char *recheck_denies = NULL;
+
+	cache_size = read_cfg_key(file, CFG_CAPI_CACHE_SIZE);
+	if (cache_size != NULL) {
+		g_lru_cache = lru_cache_create(atoi(cache_size));
+	}
+
+	cache_age = read_cfg_key(file, CFG_CAPI_CACHE_AGE);
+	if (cache_age != NULL) {
+		g_cache_age = atoi(cache_age);
+	}
+
+	recheck_denies = read_cfg_key(file, CFG_CAPI_RECHECK_DENIES);
+	if (recheck_denies != NULL) {
+		g_recheck_denies = strcmp("yes", recheck_denies) == 0;
+	}
+
+	xfree(cache_size);
+	xfree(cache_age);
+	xfree(recheck_denies);
+}
 
 
-	pthread_mutex_lock(&g_cache_lock);
+static void
+build_capi_handle_from_config(const char *file)
+{
+	/* required fields */
+	char *ip = NULL;
+	char *login = NULL;
+	char *pw = NULL;
 
-	handle = curl_easy_init();
-	if (handle == NULL) {
-		LOG_OOM();
-		error("unable to get CURL handle\n");
+	/* optional fields */
+	char *connect_timeout = NULL;
+	char *retries = NULL;
+	char *retry_sleep = NULL;
+	char *timeout = NULL;
+
+	ip = read_cfg_key(file, CFG_CAPI_IP);
+	if (ip == NULL) {
+		error("%s is a required config param", CFG_CAPI_IP);
 		goto out;
 	}
 
-	entry = slc_get_entry(g_cache_handle, customer_uuid, fp, uid);
-	if (entry != NULL) {
-		allowed = entry->slc_is_allowed;
+	login = read_cfg_key(file, CFG_CAPI_LOGIN);
+	if (login == NULL) {
+		error("%s is a required config param", CFG_CAPI_LOGIN);
+		goto out;
+	}
+
+	pw = read_cfg_key(file, CFG_CAPI_PW);
+	if (pw == NULL) {
+		error("%s is a required config param", CFG_CAPI_PW);
+		goto out;
+	}
+
+	g_capi_handle = capi_handle_create(ip, login, pw);
+	if (g_capi_handle == NULL) {
+		error("unable to create CAPI handle\n");
+		goto out;
+	}
+
+	connect_timeout = read_cfg_key(file, CFG_CAPI_CONNECT_TIMEOUT);
+	if (connect_timeout != NULL)
+		g_capi_handle->connect_timeout = atoi(connect_timeout);
+
+	retries = read_cfg_key(file, CFG_CAPI_RETRIES);
+	if (retries != NULL)
+		g_capi_handle->retries = atoi(retries);
+
+	retry_sleep = read_cfg_key(file, CFG_CAPI_RETRY_SLEEP);
+	if (retry_sleep != NULL)
+		g_capi_handle->retry_sleep = atoi(retry_sleep);
+
+	timeout = read_cfg_key(file, CFG_CAPI_TIMEOUT);
+	if (timeout != NULL)
+		g_capi_handle->timeout = atoi(timeout);
+
+  out:
+	xfree(ip);
+	xfree(login);
+	xfree(pw);
+	xfree(connect_timeout);
+	xfree(retries);
+	xfree(retry_sleep);
+	xfree(timeout);
+}
+
+
+static boolean_t
+user_allowed_in_capi(const char *uuid, const char *user, const char *fp)
+{
+	boolean_t allowed = B_FALSE;
+	cache_entry_t *cache_entry = NULL;
+	cache_entry_t *existing = NULL;
+	char *cache_key = NULL;
+	time_t now = 0;
+
+	if (uuid == NULL || user == NULL || fp == NULL) {
+		debug("user_allowed_in_capi: NULL arguments\n");
+	}
+
+	cache_key = build_cache_key(uuid, user, fp);
+
+	pthread_mutex_lock(&g_cache_lock);
+	cache_entry = (cache_entry_t *)lru_get(g_lru_cache, cache_key);
+	if (cache_entry != NULL) {
+		debug("cache hit: %p\n", cache_key);
+		allowed = cache_entry->allowed;
 		now = time(0);
-		if ((now - entry->slc_ctime) >= g_capi_cache_age) {
+		if ((now - cache_entry->ctime) >= g_cache_age) {
 			debug("cache entry expired, checking CAPI\n");
-		} else if (!allowed && g_capi_recheck_denies) {
+		} else if (!allowed && g_recheck_denies) {
 			debug("cache deny, config says to check CAPI again\n");
 		} else {
 			goto out;
 		}
+
 	}
-
-	buf_len = snprintf(NULL, 0, CAPI_URI, g_capi_ip, customer_uuid) + 1;
-	url = (char *)alloca(buf_len);
-	if (url == NULL) {
-		LOG_OOM();
-		goto out;
-	}
-	snprintf(url, buf_len, CAPI_URI, g_capi_ip, customer_uuid);
-
-	buf_len = snprintf(NULL, 0, POST_DATA, fp, name, uid) + 1;
-	post_data = (char *)alloca(buf_len);
-	if (url == NULL) {
-		LOG_OOM();
-		goto out;
-	}
-	snprintf(post_data, buf_len, POST_DATA, fp, name, uid);
-
-	curl_easy_setopt(handle, CURLOPT_URL, url);
-	curl_easy_setopt(handle, CURLOPT_NOPROGRESS, 1L);
-	curl_easy_setopt(handle, CURLOPT_HTTPAUTH, (long)CURLAUTH_BASIC);
-	curl_easy_setopt(handle, CURLOPT_USERPWD, g_capi_userpass);
-	curl_easy_setopt(handle, CURLOPT_WRITEFUNCTION, curl_callback);
-	curl_easy_setopt(handle, CURLOPT_POSTFIELDS, post_data);
-	curl_easy_setopt(handle, CURLOPT_CONNECTTIMEOUT,
-			 g_capi_connect_timeout);
-	curl_easy_setopt(handle, CURLOPT_TIMEOUT, g_capi_timeout);
-
-	do {
-		debug("attempting capi call...\n");
-		start = get_system_us();
-		res = curl_easy_perform(handle);
-		end = get_system_us();
-		debug("capi call took %ld us. Reachable?=%s\n", end - start,
-		      res == 0 ? "yes" : "no");
-
-		if (res == 0)
-			break;
-
-		info("CAPI call failed:  %d:%s\n", res,
-		     curl_easy_strerror(res));
-		if (++attempts < g_capi_retries)
-			sleep(g_capi_retry_sleep);
-	} while(attempts < g_capi_retries);
-
-	curl_easy_getinfo(handle, CURLINFO_RESPONSE_CODE, &http_code);
-	if (http_code == 201) {
-		debug("CAPI returned 201, allowing login\n");
-		allowed = B_TRUE;
-	} else {
-		debug("CAPI returned non-201: %ld\n", http_code);
-	}
-
-	if (res == 0) {
-		if (entry != NULL) {
-			debug("cache refresh, deleting entry\n");
-			slc_del_entry(g_cache_handle, entry);
-			slc_entry_free(entry);
-			entry = NULL;
-		}
-
-		entry = slc_entry_create(customer_uuid, fp, uid, allowed);
-		if (entry != NULL) {
-			if (!slc_add_entry(g_cache_handle, entry)) {
-				debug("Unable to cache response\n");
-				slc_entry_free(entry);
-			} else {
-				debug("CAPI response cached\n");
-			}
-		} else {
-			debug("slc_entry_create failed\n");
-		}
-	}
-
-  out:
+	cache_entry = NULL;
 	pthread_mutex_unlock(&g_cache_lock);
-	curl_easy_cleanup(handle);
-	return (allowed);
+
+	allowed = capi_is_allowed(g_capi_handle, uuid, fp, user);
+
+	pthread_mutex_lock(&g_cache_lock);
+	cache_entry = (cache_entry_t *)lru_get(g_lru_cache, cache_key);
+	if (cache_entry == NULL) {
+		cache_entry = (cache_entry_t *)xmalloc(sizeof(cache_entry_t));
+		if (cache_entry == NULL)
+			goto out;
+
+		existing = lru_add(g_lru_cache, cache_key, cache_entry);
+		xfree(existing);
+	}
+
+	if (cache_entry != NULL) {
+		cache_entry->ctime = time(0);
+		cache_entry->allowed = allowed;
+	}
+
+out:
+	pthread_mutex_unlock(&g_cache_lock);
+	xfree(cache_key);
+	return allowed;
 }
 
 
@@ -203,7 +209,6 @@ _key_is_authorized(zdoor_cookie_t *cookie, char *argp, size_t argp_sz)
 	zdoor_result_t *result = NULL;
 	boolean_t allowed = B_FALSE;
 	int i = 0;
-	int uid = -1;
 	char *ptr = NULL;
 	char *rest = NULL;
 	char *token = NULL;
@@ -217,28 +222,27 @@ _key_is_authorized(zdoor_cookie_t *cookie, char *argp, size_t argp_sz)
 
 	if (cookie == NULL || argp == NULL || argp_sz == 0) {
 		error("zdoor arguments NULL\n");
-		return (NULL);
+		return NULL;
 	}
+
+	debug("_key_is_authorized entered: cookie=%p, argp=%s, argp_sz=%d\n",
+	      cookie, argp, argp_sz);
 
 	ptr = argp;
 	while ((token = strtok_r(ptr, " ", &rest)) != NULL) {
 		switch (i++) {
 		case 0:
-			name = strdup(token);
-			if (name == NULL) {
-				LOG_OOM();
+			name = xstrdup(token);
+			if (name == NULL)
 				goto out;
-			}
 			break;
 		case 1:
-			uid = atoi(token);
+			/* noop, this is the uid field */
 			break;
 		case 2:
-			fp = strdup(token);
-			if (fp == NULL) {
-				LOG_OOM();
+			fp = xstrdup(token);
+			if (fp == NULL)
 				goto out;
-			}
 			break;
 		default:
 			error("processng %s\n", rest);
@@ -250,139 +254,31 @@ _key_is_authorized(zdoor_cookie_t *cookie, char *argp, size_t argp_sz)
 
 	uuid = (const char *)cookie->zdc_biscuit;
 	debug("login attempt from zone=%s, owner=%s, user=%s, fp=%s\n",
-	    cookie->zdc_zonename, uuid, name, fp);
-	allowed = user_allowed_in_capi(uuid, name, uid, fp);
+	      cookie->zdc_zonename, uuid, name, fp);
+	allowed = user_allowed_in_capi(uuid, name, fp);
 	debug("allowed?=%s\n", allowed ? "true" : "false");
 
-	result = (zdoor_result_t *)calloc(1, sizeof (zdoor_result_t));
-	if (result == NULL) {
-		LOG_OOM();
+	result = (zdoor_result_t *)xmalloc(sizeof(zdoor_result_t));
+	if (result == NULL)
 		goto out;
-	}
+
 	result->zdr_size = 2;
-	result->zdr_data = (char *)calloc(1, result->zdr_size);
-	if (result->zdr_data == NULL) {
-		LOG_OOM();
-		free(result);
+	result->zdr_data = (char *)xmalloc(result->zdr_size);
+	if (result->zdr_data != NULL) {
+		sprintf(result->zdr_data, "%d", allowed);
+	} else {
+		xfree(result);
 		result = NULL;
 	}
-	sprintf(result->zdr_data, "%d", allowed);
 out:
 	end = get_system_us();
-	info("key_authorized?=%s: uuid=%s, uid=%d, fp=%s, timing(us)=%ld\n",
-	     (allowed ? "yes" : "no"), uuid, uid, fp, (end - start));
-	uid = -1;
+	info("key_authorized?=%s: uuid=%s, user=%s, fp=%s, timing(us)=%ld\n",
+	     (allowed ? "yes" : "no"), uuid, name, fp, (end - start));
 
-	if (name != NULL) {
-		free(name);
-		name = NULL;
-	}
-	if (fp != NULL) {
-		free(fp);
-		fp = NULL;
-	}
+	xfree(name);
+	xfree(fp);
 
-	return (result);
-}
-
-static void
-close_zdoor(const char *zone)
-{
-	char **entry = NULL;
-	char *owner = NULL;
-	if (zone == NULL)
-		return;
-
-	pthread_mutex_lock(&g_zdoor_lock);
-	entry = (char **)tfind(zone, &g_zdoor_tree, _tsearch_compare);
-	if (entry != NULL && *entry != NULL) {
-		owner = zdoor_close(g_zdoor_handle, zone, KEY_SVC_NAME);
-		if (owner != NULL) {
-			free(owner);
-			owner = NULL;
-		}
-		tdelete(*entry, &g_zdoor_tree, _tsearch_compare);
-		free(*entry);
-		entry = NULL;
-	}
-	pthread_mutex_unlock(&g_zdoor_lock);
-}
-
-static boolean_t
-open_zdoor(const char *zone)
-{
-	boolean_t success = B_FALSE;
-	char *owner = NULL;
-	char *entry = NULL;
-	if (zone == NULL)
-		return (B_FALSE);
-
-	pthread_mutex_lock(&g_zdoor_lock);
-	entry = tfind(zone, &g_zdoor_tree, _tsearch_compare);
-
-	if (entry != NULL) {
-		debug("%s already has an open zdoor\n", zone);
-		success = B_TRUE;
-		goto out;
-	}
-
-	owner = get_owner_uuid(zone);
-	if (owner != NULL) {
-		if (zdoor_open(g_zdoor_handle, zone, KEY_SVC_NAME, owner,
-			_key_is_authorized) != ZDOOR_OK) {
-			debug("Failed to open %s in %s\n", KEY_SVC_NAME, zone);
-			goto out;
-		} else {
-			debug("Opened %s in %s\n", KEY_SVC_NAME, zone);
-			entry = strdup(zone);
-			if (entry == NULL) {
-				LOG_OOM();
-				zdoor_close(g_zdoor_handle, zone, KEY_SVC_NAME);
-				free(owner);
-				goto out;
-			}
-			tsearch(entry, &g_zdoor_tree, _tsearch_compare);
-			success = B_TRUE;
-		}
-	}
-  out:
-	pthread_mutex_unlock(&g_zdoor_lock);
-	return (success);
-}
-
-
-static void
-_new_zone(void *cookie, char *argp, size_t arg_size, door_desc_t *dp,
-	uint_t n_desc)
-{
-	if (argp != NULL) {
-		info("new_zone(%s) invoked (operator)\n", argp);
-		open_zdoor(argp);
-	}
-	door_return(NULL, 0, NULL, 0);
-}
-
-
-/* Note that libzdoor maintains its own zone monitor, which will restart
-   any zdoors we've previously opened if this was a reboot.  We have this
-   solely to open zdoors in new zones.  We just let this silently fail */
-static int
-zone_monitor(const char *zonename, zoneid_t zid, const char *newstate,
-		const char *oldstate, hrtime_t when, void *p)
-{
-	if (strcmp("running", newstate) == 0) {
-		if (strcmp("ready", oldstate) == 0) {
-			debug("zone %s now running...\n", zonename);
-			open_zdoor(zonename);
-		}
-	} else if (strcmp("shutting_down", newstate) == 0) {
-		if (strcmp("running", oldstate) == 0) {
-			debug("zone %s shutting down...\n", zonename);
-			close_zdoor(zonename);
-		}
-	}
-
-	return (0);
+	return result;
 }
 
 
@@ -392,28 +288,26 @@ main(int argc, char **argv)
 {
 	int i = 0;
 	int c = 0;
-	int did = 0;
-	int newfd = 0;
-	struct stat buf = {};
+	char *cfg_file = NULL;
 	char *z = NULL;
 	char **zones = NULL;
-	void *cookie = NULL;
 
 	opterr = 0;
-	while ((c = getopt (argc, argv, "sd:")) != -1) {
+	while ((c = getopt (argc, argv, "sf:d:")) != -1) {
 		switch(c) {
 		case 'd':
 			switch(atoi(optarg)) {
 			case 0:
-				g_debug_enabled = B_FALSE;
-				g_info_enabled = B_FALSE;
-				g_info_enabled = B_FALSE;
+				g_debug_level = 0;
 				break;
 			case 1:
-				g_debug_enabled = B_TRUE;
+				g_debug_level = 1;
 				break;
 			case 2:
-				g_debug_enabled = B_TRUE;
+				g_debug_level = 2;
+				break;
+			case 3:
+				g_debug_level = 2;
 				setenv("ZDOOR_TRACE", "3", 1);
 				break;
 			default:
@@ -421,8 +315,11 @@ main(int argc, char **argv)
 				break;
 			}
 			break;
+		case 'f':
+			cfg_file = xstrdup(optarg);
+			break;
 		case 's':
-			g_debug_enabled = B_FALSE;
+			g_debug_level = 0;
 			g_info_enabled = B_FALSE;
 			g_info_enabled = B_FALSE;
 			break;
@@ -434,25 +331,30 @@ main(int argc, char **argv)
 		}
 	}
 
-
-	g_zonecfg_handle = zonecfg_notify_bind(zone_monitor, NULL);
-
 	curl_global_init(CURL_GLOBAL_ALL);
 
-	if (!read_config()) {
-		error("Unable to read config file!\n");
+	if (cfg_file == NULL) {
+		cfg_file = getenv(CFGFILE_ENV_VAR);
+		if (cfg_file == NULL) {
+			error("neither -f <file> nor %s were specified\n",
+			      CFGFILE_ENV_VAR);
+			exit(1);
+		}
+	}
+
+	build_capi_handle_from_config(cfg_file);
+	if (g_capi_handle == NULL) {
+		error("Unable to create CAPI handle from %s\n", cfg_file);
 		exit(1);
 	}
 
-	g_cache_handle = slc_handle_init(g_capi_cache_size);
-	if (g_cache_handle == NULL) {
-		error("slc_handle_init failed\n");
-		exit(1);
+	build_lru_cache_from_config(cfg_file);
+	if (g_lru_cache == NULL) {
+		info("CAPI caching disabled\n");
 	}
 
-	g_zdoor_handle = zdoor_handle_init();
-	if (g_zdoor_handle == NULL) {
-		error("zdoor_handle_init failed\n");
+	if (!register_zmon(KEY_SVC_NAME, _key_is_authorized)) {
+		error("FATAL: unable to setup zone monitoring\n");
 		exit(1);
 	}
 
@@ -463,46 +365,19 @@ main(int argc, char **argv)
 		z = zones[++i];
 	}
 
-	if ((did = door_create(_new_zone, 0, 0)) < 0) {
-		error("unable to door_create provisioner door: %s\n",
-		      strerror(errno));
-		exit(1);
-	}
-	if (stat(DOOR_FILE, &buf) < 0) {
-		if ((newfd = creat(DOOR_FILE, 0444)) < 0) {
-			error("unable to creat provisioner door file: %s\n",
-			      strerror(errno));
-			exit(1);
-		}
-		(void) close(newfd);
-	}
-	(void) fdetach(DOOR_FILE);
-	if (fattach(did, DOOR_FILE) < 0) {
-		error("unable to fattach provisioner door: %s\n",
-		      strerror(errno));
-		exit(2);
-	}
-
 	info("smartlogin running...\n");
 	pause();
-
-	door_revoke(did);
 
 	i = 0;
 	z = zones[0];
 	while(z != NULL) {
-		cookie = zdoor_close(g_zdoor_handle, z, KEY_SVC_NAME);
-		if (cookie != NULL)
-			free(cookie);
-		free(z);
+		close_zdoor(z);
+		xfree(z);
 		z = zones[++i];
 	}
-	free(zones);
-	slc_handle_destroy(g_cache_handle);
-	zdoor_handle_destroy(g_zdoor_handle);
+	xfree(zones);
+	lru_cache_destroy(g_lru_cache);
 	curl_global_cleanup();
-
-	zonecfg_notify_unbind(g_zonecfg_handle);
 
 	return 0;
 }

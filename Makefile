@@ -14,18 +14,19 @@ LDFLAGS	= -L/lib -static-libgcc
 
 AGENT := ${NAME}
 AGENT_SRC = \
-	src/agent/cache.c 	\
+	src/agent/capi.c 	\
 	src/agent/config.c 	\
+	src/agent/hash.c 	\
+	src/agent/list.c	\
 	src/agent/log.c		\
-	src/agent/server.c 	\
-	src/agent/zones.c
+	src/agent/lru.c		\
+	src/agent/server.c	\
+	src/agent/util.c	\
+	src/agent/zutil.c
+
 # ARG! Some versions of solaris have curl 3, some curl 4,
 # so pick up the specific version
-AGENT_LIBS = -lzdoor -lzonecfg /usr/lib/libcurl.so.4 -ldoor
-
-CLIENT := notify-${NAME}
-CLIENT_SRC = src/client/client.c
-CLIENT_LIBS = -ldoor
+AGENT_LIBS = -lzdoor -lzonecfg /usr/lib/libcurl.so.4
 
 NPM_FILES =		\
 	bin		\
@@ -41,11 +42,7 @@ ${AGENT}:
 	mkdir -p bin
 	${CC} ${CCFLAGS} ${LDFLAGS} -o bin/$@ $^ ${AGENT_SRC} ${AGENT_LIBS}
 
-${CLIENT}:
-	mkdir -p bin
-	${CC} ${CCFLAGS} ${LDFLAGS} -o bin/$@ $^ ${CLIENT_SRC} ${CLIENT_LIBS}
-
-$(TARBALL): ${CLIENT} ${AGENT} $(NPM_FILES)
+$(TARBALL): ${AGENT} $(NPM_FILES)
 	rm -fr .npm
 	mkdir -p .npm/$(NAME)/
 	cp -Pr $(NPM_FILES) .npm/$(NAME)/

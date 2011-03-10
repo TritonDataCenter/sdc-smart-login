@@ -8,16 +8,14 @@
 extern "C" {
 #endif
 
-extern boolean_t g_debug_enabled;
+extern int g_debug_level;
 extern boolean_t g_info_enabled;
 extern boolean_t g_error_enabled;
 
 extern void debug(const char *fmt, ...);
+extern void debug2(const char *fmt, ...);
 extern void info(const char *fmt, ...);
 extern void error(const char *fmt, ...);
-
-
-#define LOG_OOM() error("Out of Memory at %s:%d\n", __FILE__, __LINE__);
 
 #ifdef __cplusplus
 }

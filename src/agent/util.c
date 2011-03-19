@@ -12,20 +12,20 @@ xcalloc(size_t count, size_t sz)
 	void *ptr = NULL;
 
 	if (count == 0 || sz == 0)
-		return NULL;
+		return (NULL);
 
 	ptr = calloc(count, sz);
 	if (ptr == NULL)
 		error("Out of Memory (%d bytes)\n", sz * count);
 
-	return ptr;
+	return (ptr);
 }
 
 
 void *
 xmalloc(size_t sz)
 {
-	return xcalloc(1, sz);
+	return (xcalloc(1, sz));
 }
 
 char *
@@ -34,15 +34,15 @@ xstrdup(const char *str)
 	int len = 0;
 	char *buf = NULL;
 	if (str == NULL)
-		return NULL;
+		return (NULL);
 
 	len = strlen(str) + 1;
 	buf = xmalloc(len);
 	if (buf == NULL)
-		return NULL;
+		return (NULL);
 
-	strncpy(buf, str, len);
-	return buf;
+	(void) strncpy(buf, str, len);
+	return (buf);
 }
 
 void
@@ -55,7 +55,8 @@ xfree(void *ptr)
 
 void
 chomp(char *s) {
-	while(*s && *s != '\n' && *s != '\r') s++;
+	while (*s && *s != '\n' && *s != '\r')
+		s++;
 	*s = 0;
 }
 
@@ -63,6 +64,6 @@ chomp(char *s) {
 long
 get_system_us() {
 	struct timeval tp = {0};
-	gettimeofday(&tp, NULL);
-	return tp.tv_usec;
+	(void) gettimeofday(&tp, NULL);
+	return (tp.tv_usec);
 }

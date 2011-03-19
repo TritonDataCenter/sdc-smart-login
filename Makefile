@@ -42,6 +42,13 @@ ${AGENT}:
 	mkdir -p bin
 	${CC} ${CCFLAGS} ${LDFLAGS} -o bin/$@ $^ ${AGENT_SRC} ${AGENT_LIBS}
 
+lint:
+	for file in ${AGENT_SRC} ; do \
+		echo $$file ; \
+		lint -Isrc/agent -uaxm -m64 $$file ;  \
+		echo "--------------------" ; \
+	done
+
 $(TARBALL): ${AGENT} $(NPM_FILES)
 	rm -fr .npm
 	mkdir -p .npm/$(NAME)/

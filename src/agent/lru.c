@@ -12,7 +12,7 @@ typedef struct lru_entry {
 static lru_entry_t *
 lru_entry_create(const char *key, void *value)
 {
-	lru_entry_t *entry = xmalloc(sizeof(lru_entry_t));
+	lru_entry_t *entry = xmalloc(sizeof (lru_entry_t));
 	if (entry != NULL) {
 		entry->value = value;
 		entry->key = xstrdup(key);
@@ -20,7 +20,7 @@ lru_entry_create(const char *key, void *value)
 			xfree(entry);
 	}
 
-	return entry;
+	return (entry);
 }
 
 
@@ -33,7 +33,7 @@ lru_entry_destroy(lru_entry_t *entry)
 		xfree(entry->key);
 		xfree(entry);
 	}
-	return value;
+	return (value);
 }
 
 
@@ -43,12 +43,12 @@ lru_cache_create(size_t size)
 	lru_cache_t *lru = NULL;
 
 	if (size == 0)
-		return NULL;
+		return (NULL);
 
 	lru = xmalloc(size);
 	if (lru == NULL) {
 		debug2("lru_cache_create: malloc failure\n");
-		return NULL;
+		return (NULL);
 	}
 
 	lru->size = size;
@@ -56,7 +56,7 @@ lru_cache_create(size_t size)
 	lru->hash = hash_handle_create(size);
 	if (lru->hash == NULL) {
 		lru_cache_destroy(lru);
-		return NULL;
+		return (NULL);
 	}
 	lru->list = list_create();
 	if (lru->list == NULL) {
@@ -65,7 +65,7 @@ lru_cache_create(size_t size)
 	}
 
 	debug2("lru_cache_create: returning %p\n", lru);
-	return lru;
+	return (lru);
 }
 
 
@@ -93,7 +93,7 @@ lru_add(lru_cache_t *lru, const char *key, void *value)
 
 	if (lru == NULL || key == NULL || value == NULL) {
 		debug2("lru_add: NULL arguments\n");
-		return value;
+		return (value);
 	}
 	debug("lru_add: lru=%p, key=%s, value=%p\n", lru, key, value);
 
@@ -122,7 +122,7 @@ lru_add(lru_cache_t *lru, const char *key, void *value)
 			entry = (lru_entry_t *)tmp->data;
 			assert(entry != NULL);
 			debug("lru_add: at capacity(%d), evicting %s\n",
-			      lru->size, entry->key);
+				lru->size, entry->key);
 			hash_del(lru->hash, entry->key);
 			existing_value = lru_entry_destroy(entry);
 			list_node_destroy(tmp);
@@ -130,7 +130,7 @@ lru_add(lru_cache_t *lru, const char *key, void *value)
 	}
 out:
 	debug("lru_add: returning: %p\n", existing_value);
-	return existing_value;
+	return (existing_value);
 }
 
 
@@ -162,5 +162,5 @@ lru_get(lru_cache_t *lru, const char *key)
 
 out:
 	debug("lru_get: %s returning: \n", key, value);
-	return value;
+	return (value);
 }

@@ -1,6 +1,6 @@
 /* Copyright 2011 Joyent, Inc. */
 #ifndef LOG_H_
-#define LOG_H_
+#define	LOG_H_
 
 #include <sys/types.h>
 

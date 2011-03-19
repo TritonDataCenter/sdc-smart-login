@@ -1,6 +1,6 @@
 /* Copyright 2011 Joyent, Inc. */
 #ifndef CAPI_H_
-#define CAPI_H_
+#define	CAPI_H_
 
 #include <curl/curl.h>
 #include <sys/types.h>
@@ -12,7 +12,7 @@ extern "C" {
 /**
  * Holder for CAPI connection information.
  *
- * Every time CAPI is invoked a new CURL handle is setup/destroyed
+ * Every time CAPI is invoked a new CURL handle is setup/destroyed.
  */
 typedef struct capi_handle {
 	char *ip;
@@ -33,15 +33,15 @@ typedef struct capi_handle {
  * @param pass
  * @return capi_handle_t
  */
-capi_handle_t *capi_handle_create(const char *ip, const char *user,
-				  const char*pass);
+extern capi_handle_t *capi_handle_create(const char *ip, const char *user,
+				const char*pass);
 
 /**
- * Frees up memory associated to CAPI handle
+ * Frees up memory associated to CAPI handle.
  *
  * @param handle
  */
-void capi_handle_destroy(capi_handle_t *handle);
+extern void capi_handle_destroy(capi_handle_t *handle);
 
 /**
  * Wrapper over an HTTP call to CAPI
@@ -56,10 +56,10 @@ void capi_handle_destroy(capi_handle_t *handle);
  * @param uuid (owner_uuid -> customer-uuid in CAPI)
  * @param ssh_fp the MD5 fingerprint of an SSH key
  * @param user the current unix user trying to log in
- * @param boolean
+ * @return boolean
  */
-boolean_t capi_is_allowed(capi_handle_t *handle, const char *uuid,
-			  const char *ssh_fp, const char *user);
+extern boolean_t capi_is_allowed(capi_handle_t *handle, const char *uuid,
+			const char *ssh_fp, const char *user);
 
 #ifdef __cplusplus
 }

@@ -1,6 +1,6 @@
 /* Copyright 2011 Joyent, Inc. */
 #ifndef UTIL_H_
-#define UTIL_H_
+#define	UTIL_H_
 
 #include <sys/types.h>
 
@@ -12,7 +12,7 @@ extern "C" {
  * Simple wrapper over calloc
  *
  */
-void *xcalloc(size_t count, size_t sz);
+extern void *xcalloc(size_t count, size_t sz);
 
 /**
  * Simple wrapper over memory allocation..
@@ -22,12 +22,12 @@ void *xcalloc(size_t count, size_t sz);
  * stderr.  Your memory will be initialize to '\0' (i.e., this wraps calloc).
  *
  */
-void *xmalloc(size_t sz);
+extern void *xmalloc(size_t sz);
 
 /**
  * Simple wrapper over strdup
  */
-char *xstrdup(const char *str);
+extern char *xstrdup(const char *str);
 
 /**
  * Simple check if ptr is NULL before a free.
@@ -36,21 +36,21 @@ char *xstrdup(const char *str);
  *
  * @param ptr
  */
-void xfree(void *ptr);
+extern void xfree(void *ptr);
 
 /**
- * Destructively removes any trailing whitespace.
+ * Destructively removes any bytes after a terminating '\0'.
  *
  * @param s
  */
-void chomp(char *s);
+extern void chomp(char *s);
 
 /**
  * Simple wrapper over gettimeofday()->tv_usec.
  *
  * @return current unix time in microseconds
  */
-long get_system_us();
+extern long get_system_us();
 
 #ifdef __cplusplus
 }

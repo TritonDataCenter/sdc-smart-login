@@ -24,10 +24,10 @@ get_capi_url(const char *ip, const char *uuid)
 	buf = xmalloc(len);
 	if (buf == NULL) {
 		debug2("unable to allocate %d bytes for url\n", len);
-		return NULL;
+		return (NULL);
 	}
-	snprintf(buf, len, CAPI_URI, ip, uuid);
-	return buf;
+	(void) snprintf(buf, len, CAPI_URI, ip, uuid);
+	return (buf);
 }
 
 static char *
@@ -40,10 +40,10 @@ get_capi_form_data(const char *fp, const char *user)
 	buf = xmalloc(len);
 	if (buf == NULL) {
 		debug2("unable to allocate %d bytes for form_data\n", len);
-		return NULL;
+		return (NULL);
 	}
-	snprintf(buf, len, FORM_DATA, fp, user);
-	return buf;
+	(void) snprintf(buf, len, FORM_DATA, fp, user);
+	return (buf);
 }
 
 
@@ -61,7 +61,7 @@ get_curl_handle(capi_handle_t *handle, const char *url, const char *form_data)
 
 	curl = curl_easy_init();
 	if (curl == NULL)
-		return NULL;
+		return (NULL);
 
 	curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, handle->connect_timeout);
 	curl_easy_setopt(curl, CURLOPT_DNS_CACHE_TIMEOUT, -1);
@@ -75,7 +75,7 @@ get_curl_handle(capi_handle_t *handle, const char *url, const char *form_data)
 	curl_easy_setopt(curl, CURLOPT_USERPWD, handle->basic_auth_cred);
 	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curl_callback);
 
-	return curl;
+	return (curl);
 }
 
 
@@ -87,14 +87,14 @@ capi_handle_create(const char *ip, const char *user, const char *pass)
 
 	if (ip == NULL || user == NULL || pass == NULL) {
 		debug2("capi_handle_create: NULL arguments\n");
-		return NULL;
+		return (NULL);
 	}
 
 	debug2("capi_handle_create: ip=%s, user=%s, pass=%s\n", ip, user, pass);
 
-	handle= xmalloc(sizeof(capi_handle_t));
+	handle = xmalloc(sizeof (capi_handle_t));
 	if (handle == NULL)
-		return NULL;
+		return (NULL);
 
 	handle->connect_timeout = 1;
 	handle->retries = 1;
@@ -104,19 +104,19 @@ capi_handle_create(const char *ip, const char *user, const char *pass)
 	handle->ip = xstrdup(ip);
 	if (handle->ip == NULL) {
 		capi_handle_destroy(handle);
-		return NULL;
+		return (NULL);
 	}
 
 	len = snprintf(NULL, 0, BASIC_AUTH, user, pass) + 1;
 	handle->basic_auth_cred = xmalloc(len);
 	if (handle->basic_auth_cred == NULL) {
 		capi_handle_destroy(handle);
-		return NULL;
+		return (NULL);
 	}
-	snprintf(handle->basic_auth_cred, len, BASIC_AUTH, user, pass);
+	(void) snprintf(handle->basic_auth_cred, len, BASIC_AUTH, user, pass);
 
 	debug2("capi_handle_create: returning %p\n", handle);
-	return handle;
+	return (handle);
 }
 
 
@@ -148,10 +148,10 @@ capi_is_allowed(capi_handle_t *handle, const char *uuid,
 
 	if (handle == NULL || uuid == NULL || ssh_fp == NULL || user == NULL) {
 		debug2("capi_is_allowed: NULL arguments\n");
-		return B_FALSE;
+		return (B_FALSE);
 	}
 	debug("capi_is_allowed: handle=%p, uuid=%s, ssh_fp=%s, user=%s\n",
-	      handle, uuid, ssh_fp, user);
+		handle, uuid, ssh_fp, user);
 
 	url = get_capi_url(handle->ip, uuid);
 	if (url == NULL)
@@ -170,16 +170,16 @@ capi_is_allowed(capi_handle_t *handle, const char *uuid,
 		res = curl_easy_perform(curl);
 		end = get_system_us();
 		debug2("capi_is_allowed: reachable?=%s, timing(us)=%ld\n",
-		      (res == 0 ? "yes" : "no"), (end - start));
+			(res == 0 ? "yes" : "no"), (end - start));
 
 		if (res == 0)
 			break;
 
 		info("CAPI network error:  %d:%s\n", res,
-		     curl_easy_strerror(res));
+			curl_easy_strerror(res));
 
 		if (++attempts < handle->retries)
-			sleep(handle->retry_sleep);
+			(void) sleep(handle->retry_sleep);
 	} while (attempts < handle->retries);
 
 	curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
@@ -195,5 +195,5 @@ out:
 	}
 
 	debug("capi_is_allowed: returning %s\n", allowed ? "true" : "false");
-	return allowed;
+	return (allowed);
 }

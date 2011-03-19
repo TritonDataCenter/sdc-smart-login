@@ -18,7 +18,7 @@ hash_entry_free(hash_entry_t *entry)
 	}
 	xfree(entry);
 
-	return value;
+	return (value);
 }
 
 
@@ -28,12 +28,12 @@ hash_entry_create(const char *key, void *value)
 	hash_entry_t *entry = NULL;
 
 	if (key == NULL || value == NULL)
-		return NULL;
+		return (NULL);
 
-	entry = xmalloc(sizeof(hash_entry_t));
+	entry = xmalloc(sizeof (hash_entry_t));
 	if (entry == NULL) {
 		debug2("hash_entry_create: xmalloc failed\n");
-		return NULL;
+		return (NULL);
 	}
 	entry->value = value;
 	entry->key = xstrdup(key);
@@ -43,7 +43,7 @@ hash_entry_create(const char *key, void *value)
 		entry = NULL;
 	}
 
-	return entry;
+	return (entry);
 }
 
 
@@ -61,29 +61,28 @@ _hash(const char *key, size_t size)
 	if (hash_val < 0)
 		hash_val += size;
 
-	return hash_val;
+	return (hash_val);
 }
 
 
 static boolean_t
-is_prime (size_t candidate)
+is_prime(size_t candidate)
 {
-  /* No even number and none less than 10 will be passed here.  */
-  size_t divn = 3;
-  size_t sq = divn * divn;
-  size_t old_sq = sq;
+	/* No even number and none less than 10 will be passed here.  */
+	size_t divn = 3;
+	size_t sq = divn * divn;
+	size_t old_sq = sq;
 
-  while (sq < candidate && candidate % divn != 0)
-    {
-      old_sq = sq;
-      ++divn;
-      sq += 4 * divn;
-      if (sq < old_sq)
-        return B_TRUE;
-      ++divn;
-    }
+	while (sq < candidate && candidate % divn != 0) {
+		old_sq = sq;
+		++divn;
+		sq += 4 * divn;
+		if (sq < old_sq)
+			return (B_TRUE);
+		++divn;
+	}
 
-  return candidate % divn != 0;
+	return (candidate % divn != 0);
 }
 
 
@@ -91,10 +90,10 @@ static size_t
 next_prime(size_t seed)
 {
 	seed |= 1;
-	while (!is_prime (seed))
+	while (!is_prime(seed))
 		seed += 2;
 
-	return seed;
+	return (seed);
 }
 
 
@@ -104,14 +103,14 @@ hash_handle_create(size_t size)
 	hash_handle_t *handle = NULL;
 
 	if (size == 0)
-		return NULL;
+		return (NULL);
 
-	handle = (hash_handle_t *)xmalloc(sizeof(hash_handle_t));
+	handle = (hash_handle_t *)xmalloc(sizeof (hash_handle_t));
 	if (handle != NULL) {
 		handle->size = next_prime(size);
 		handle->table =
 			(list_handle_t **)xcalloc(handle->size + 1,
-						  sizeof(list_handle_t));
+						sizeof (list_handle_t));
 		if (handle->table == NULL) {
 			debug2("Unable to create hash lists\n");
 			hash_handle_destroy(handle);
@@ -119,7 +118,7 @@ hash_handle_create(size_t size)
 		}
 	}
 
-	return handle;
+	return (handle);
 }
 
 
@@ -183,7 +182,7 @@ hash_get(hash_handle_t *handle, const char *key)
 
 	if (handle == NULL || key == NULL) {
 		debug2("hash_get: NULL arguments\n");
-		return NULL;
+		return (NULL);
 	}
 
 	debug2("hash_get: handle=%p, key=%s\n", handle, key);
@@ -192,7 +191,7 @@ hash_get(hash_handle_t *handle, const char *key)
 	list = handle->table[index];
 	if (list == NULL) {
 		debug2("hash_get: %s hashes to an empty chain\n", key);
-		return NULL;
+		return (NULL);
 	}
 
 	node = list->head;
@@ -207,7 +206,7 @@ hash_get(hash_handle_t *handle, const char *key)
 	}
 
 	debug2("hash_get: returning %p\n", value);
-	return value;
+	return (value);
 }
 
 
@@ -222,7 +221,7 @@ hash_del(hash_handle_t *handle, const char *key)
 
 	if (handle == NULL || key == NULL) {
 		debug2("hash_del: NULL arguments\n");
-		return NULL;
+		return (NULL);
 	}
 
 	debug2("hash_del: handle=%p, key=%s\n", handle, key);
@@ -231,7 +230,7 @@ hash_del(hash_handle_t *handle, const char *key)
 	list = handle->table[index];
 	if (list == NULL) {
 		debug2("hash_del: %s hashes to an empty chain\n");
-		return NULL;
+		return (NULL);
 	}
 
 	node = list->head;
@@ -250,6 +249,5 @@ hash_del(hash_handle_t *handle, const char *key)
 		value = hash_entry_free(entry);
 
 	debug2("hash_del: returning %p\n", value);
-	return value;
-
+	return (value);
 }

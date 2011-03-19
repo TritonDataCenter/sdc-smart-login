@@ -7,7 +7,7 @@
 list_handle_t *
 list_create()
 {
-	return xmalloc(sizeof(list_handle_t));
+	return (list_handle_t *)xmalloc(sizeof (list_handle_t));
 }
 
 
@@ -25,15 +25,15 @@ list_node_create(void *data)
 
 	if (data == NULL) {
 		debug2("list_node_create: NULL arguments\n");
-		return NULL;
+		return (NULL);
 	}
 
-	node = xmalloc(sizeof(list_node_t));
+	node = xmalloc(sizeof (list_node_t));
 	if (node != NULL)
 		node->data = data;
 
 	debug2("list_node_create: returning %p\n", node);
-	return node;
+	return (node);
 }
 
 
@@ -44,7 +44,7 @@ list_node_destroy(list_node_t *node)
 
 	if (node == NULL) {
 		debug2("list_node_destroy: NULL arguments\n");
-		return NULL;
+		return (NULL);
 	}
 
 	debug2("list_node_destroy: node=%p\n", node);
@@ -52,7 +52,7 @@ list_node_destroy(list_node_t *node)
 	xfree(node);
 
 	debug2("list_node_destroy: returning %p\n", ptr);
-	return ptr;
+	return (ptr);
 }
 
 
@@ -86,7 +86,7 @@ list_pop(list_handle_t *handle)
 
 	if (handle == NULL) {
 		debug2("list_pop: NULL arguments\n");
-		return NULL;
+		return (NULL);
 	}
 
 	debug2("list_pop: handle=%p\n", handle);
@@ -95,7 +95,7 @@ list_pop(list_handle_t *handle)
 	list_del(handle, handle->tail);
 
 	debug2("list_pop: returning node=%p\n", node);
-	return node;
+	return (node);
 }
 
 

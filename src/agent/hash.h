@@ -1,6 +1,6 @@
 /* Copyright 2011 Joyent, Inc. */
 #ifndef HASH_H_
-#define HASH_H_
+#define	HASH_H_
 
 #include <sys/types.h>
 
@@ -32,7 +32,7 @@ typedef struct hash_handle {
  * @param size
  * @return hash_handle_t on success, NULL on error
  */
-hash_handle_t *hash_handle_create(size_t size);
+extern hash_handle_t *hash_handle_create(size_t size);
 
 /**
  * Destroys a hash table
@@ -41,7 +41,7 @@ hash_handle_t *hash_handle_create(size_t size);
  *
  * @param handle
  */
-void hash_handle_destroy(hash_handle_t *handle);
+extern void hash_handle_destroy(hash_handle_t *handle);
 
 /**
  * Puts a new entry in the cache.
@@ -52,7 +52,7 @@ void hash_handle_destroy(hash_handle_t *handle);
  * @param key
  * @param value (can't be NULL)
  */
-void hash_add(hash_handle_t *handle, const char *key, void *value);
+extern void hash_add(hash_handle_t *handle, const char *key, void *value);
 
 /**
  * Retrieves an entry from the table, if it exists
@@ -61,7 +61,7 @@ void hash_add(hash_handle_t *handle, const char *key, void *value);
  * @param key
  * @return the associated value if it exists, NULL if it doesn't.
  */
-void *hash_get(hash_handle_t *handle, const char *key);
+extern void *hash_get(hash_handle_t *handle, const char *key);
 
 /**
  * Deletes an entry from the table
@@ -70,7 +70,7 @@ void *hash_get(hash_handle_t *handle, const char *key);
  * @param key
  * @return the associated value if key existed, NULL if it didn't.
  */
-void *hash_del(hash_handle_t *handle, const char *key);
+extern void *hash_del(hash_handle_t *handle, const char *key);
 
 #ifdef __cplusplus
 }

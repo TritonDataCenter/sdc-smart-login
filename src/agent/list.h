@@ -1,6 +1,6 @@
 /* Copyright 2011 Joyent, Inc. */
 #ifndef LIST_H_
-#define LIST_H_
+#define	LIST_H_
 
 #ifdef __cplusplus
 extern "C" {
@@ -28,7 +28,7 @@ typedef struct list_handle {
  *
  * @return an empty list on success, NULL on error.
  */
-list_handle_t *list_create();
+extern list_handle_t *list_create();
 
 /**
  * Destroys a list handle.
@@ -37,7 +37,7 @@ list_handle_t *list_create();
  *
  * @param handle
  */
-void list_destroy(list_handle_t *handle);
+extern void list_destroy(list_handle_t *handle);
 
 /**
  * Creates a new node to be inserted into a list.
@@ -45,7 +45,7 @@ void list_destroy(list_handle_t *handle);
  * @param data (CANNOT BE NULL)
  * @return new node, or NULL on error
  */
-list_node_t *list_node_create(void *data);
+extern list_node_t *list_node_create(void *data);
 
 /**
  * Frees memory associated with a node.
@@ -53,7 +53,7 @@ list_node_t *list_node_create(void *data);
  * @param node
  * @return data that was inside the node.
  */
-void *list_node_destroy(list_node_t *node);
+extern void *list_node_destroy(list_node_t *node);
 
 /**
  * Pushes a node onto the head of the list.
@@ -61,7 +61,7 @@ void *list_node_destroy(list_node_t *node);
  * @param handle
  * @param node
  */
-void list_push(list_handle_t *handle, list_node_t *node);
+extern void list_push(list_handle_t *handle, list_node_t *node);
 
 /**
  * Removes a node from the tail of the list.
@@ -69,7 +69,7 @@ void list_push(list_handle_t *handle, list_node_t *node);
  * @param handle
  * @return the old tail
  */
-list_node_t *list_pop(list_handle_t *handle);
+extern list_node_t *list_pop(list_handle_t *handle);
 
 /**
  * Fixes up the pointers around node in the list, so that node isn't
@@ -78,7 +78,7 @@ list_node_t *list_pop(list_handle_t *handle);
  * @param handle
  * @param node
  */
-void list_del(list_handle_t *handle, list_node_t *node);
+extern void list_del(list_handle_t *handle, list_node_t *node);
 
 #ifdef __cplusplus
 }

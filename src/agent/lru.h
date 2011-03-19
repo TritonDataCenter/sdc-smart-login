@@ -1,6 +1,6 @@
 /* Copyright 2011 Joyent, Inc. */
 #ifndef LRU_H_
-#define LRU_H_
+#define	LRU_H_
 
 #include "hash.h"
 #include "list.h"
@@ -29,7 +29,7 @@ typedef struct lru_cache {
  * @param size
  * @return LRU cache on success, NULL on error.
  */
-lru_cache_t *lru_cache_create(size_t size);
+extern lru_cache_t *lru_cache_create(size_t size);
 
 /**
  * Cleans up cache handle memory
@@ -39,7 +39,7 @@ lru_cache_t *lru_cache_create(size_t size);
  *
  * @param lru
  */
-void lru_cache_destroy(lru_cache_t *lru);
+extern void lru_cache_destroy(lru_cache_t *lru);
 
 
 /**
@@ -53,7 +53,7 @@ void lru_cache_destroy(lru_cache_t *lru);
  * @param value
  * @return the evicted value, if any
  */
-void *lru_add(lru_cache_t *lru, const char *key, void *value);
+extern void *lru_add(lru_cache_t *lru, const char *key, void *value);
 
 /**
  * Retrieves an entry from the cache
@@ -64,7 +64,7 @@ void *lru_add(lru_cache_t *lru, const char *key, void *value);
  * @param key
  * @return the value associated to key, or NULL if non-existent
  */
-void *lru_get(lru_cache_t *lru, const char *key);
+extern void *lru_get(lru_cache_t *lru, const char *key);
 
 #ifdef __cplusplus
 }

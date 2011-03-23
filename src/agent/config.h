@@ -6,7 +6,7 @@
 extern "C" {
 #endif
 
-#define	CFG_CAPI_IP			"capi-ip"
+#define	CFG_CAPI_URL			"capi-url"
 #define	CFG_CAPI_LOGIN			"capi-login"
 #define	CFG_CAPI_PW			"capi-pw"
 #define	CFG_CAPI_CACHE_SIZE		"capi-cache-size"

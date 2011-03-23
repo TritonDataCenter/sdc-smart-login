@@ -15,7 +15,7 @@ extern "C" {
  * Every time CAPI is invoked a new CURL handle is setup/destroyed.
  */
 typedef struct capi_handle {
-	char *ip;
+	char *url;
 	char *basic_auth_cred;
 	unsigned int connect_timeout;
 	unsigned int retries;
@@ -28,12 +28,12 @@ typedef struct capi_handle {
  *
  * Caller needs to read the params in out of config.
  *
- * @param ip
+ * @param url
  * @param user
  * @param pass
  * @return capi_handle_t
  */
-extern capi_handle_t *capi_handle_create(const char *ip, const char *user,
+extern capi_handle_t *capi_handle_create(const char *url, const char *user,
 				const char*pass);
 
 /**

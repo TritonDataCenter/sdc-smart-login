@@ -14,7 +14,7 @@ load_sdc_config
 
 if [ ! -f $CFG_FILE ];
 then
-    echo "capi-ip=$CONFIG_capi_admin_ip" > $CFG_FILE
+    echo "capi-url=$CONFIG_capi_client_url" > $CFG_FILE
     echo "capi-login=$CONFIG_capi_http_admin_user" >> $CFG_FILE
     echo "capi-pw=$CONFIG_capi_http_admin_pw" >> $CFG_FILE
     echo "capi-connect-timeout=1" >> $CFG_FILE

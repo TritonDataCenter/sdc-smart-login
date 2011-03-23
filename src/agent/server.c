@@ -97,7 +97,7 @@ static void
 build_capi_handle_from_config(const char *file)
 {
 	/* required fields */
-	char *ip = NULL;
+	char *url = NULL;
 	char *login = NULL;
 	char *pw = NULL;
 
@@ -107,9 +107,9 @@ build_capi_handle_from_config(const char *file)
 	char *retry_sleep = NULL;
 	char *timeout = NULL;
 
-	ip = read_cfg_key(file, CFG_CAPI_IP);
-	if (ip == NULL) {
-		error("%s is a required config param", CFG_CAPI_IP);
+	url = read_cfg_key(file, CFG_CAPI_URL);
+	if (url == NULL) {
+		error("%s is a required config param", CFG_CAPI_URL);
 		goto out;
 	}
 
@@ -125,7 +125,7 @@ build_capi_handle_from_config(const char *file)
 		goto out;
 	}
 
-	g_capi_handle = capi_handle_create(ip, login, pw);
+	g_capi_handle = capi_handle_create(url, login, pw);
 	if (g_capi_handle == NULL) {
 		error("unable to create CAPI handle\n");
 		goto out;
@@ -148,7 +148,7 @@ build_capi_handle_from_config(const char *file)
 		g_capi_handle->timeout = atoi(timeout);
 
 out:
-	xfree(ip);
+	xfree(url);
 	xfree(login);
 	xfree(pw);
 	xfree(connect_timeout);

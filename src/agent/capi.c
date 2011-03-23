@@ -11,22 +11,22 @@
 #include "util.h"
 
 static const char *BASIC_AUTH = "%s:%s";
-static const char *CAPI_URI = "http://%s:8080/customers/%s/ssh_sessions";
+static const char *CAPI_URI = "%s/customers/%s/ssh_sessions";
 static const char *FORM_DATA = "fingerprint=%s&name=%s";
 
 
 static char *
-get_capi_url(const char *ip, const char *uuid)
+get_capi_url(const char *url, const char *uuid)
 {
 	char *buf = NULL;
 	int len = 0;
-	len = snprintf(NULL, 0, CAPI_URI, ip, uuid) + 1;
+	len = snprintf(NULL, 0, CAPI_URI, url, uuid) + 1;
 	buf = xmalloc(len);
 	if (buf == NULL) {
 		debug2("unable to allocate %d bytes for url\n", len);
 		return (NULL);
 	}
-	(void) snprintf(buf, len, CAPI_URI, ip, uuid);
+	(void) snprintf(buf, len, CAPI_URI, url, uuid);
 	return (buf);
 }
 
@@ -80,17 +80,17 @@ get_curl_handle(capi_handle_t *handle, const char *url, const char *form_data)
 
 
 capi_handle_t *
-capi_handle_create(const char *ip, const char *user, const char *pass)
+capi_handle_create(const char *url, const char *user, const char *pass)
 {
 	capi_handle_t *handle = NULL;
 	int len = 0;
 
-	if (ip == NULL || user == NULL || pass == NULL) {
+	if (url == NULL || user == NULL || pass == NULL) {
 		debug2("capi_handle_create: NULL arguments\n");
 		return (NULL);
 	}
 
-	debug2("capi_handle_create: ip=%s, user=%s, pass=%s\n", ip, user, pass);
+	debug2("capi_handle_create: url=%s, user=%s, pass=%s\n", url, user, pass);
 
 	handle = xmalloc(sizeof (capi_handle_t));
 	if (handle == NULL)
@@ -101,8 +101,8 @@ capi_handle_create(const char *ip, const char *user, const char *pass)
 	handle->retry_sleep = 1;
 	handle->timeout = 3;
 
-	handle->ip = xstrdup(ip);
-	if (handle->ip == NULL) {
+	handle->url = xstrdup(url);
+	if (handle->url == NULL) {
 		capi_handle_destroy(handle);
 		return (NULL);
 	}
@@ -125,7 +125,7 @@ capi_handle_destroy(capi_handle_t *handle)
 {
 	debug2("capi_handle_destroy: handle=%p\n", handle);
 	if (handle != NULL) {
-		xfree(handle->ip);
+		xfree(handle->url);
 		xfree(handle->basic_auth_cred);
 		xfree(handle);
 	}
@@ -153,7 +153,7 @@ capi_is_allowed(capi_handle_t *handle, const char *uuid,
 	debug("capi_is_allowed: handle=%p, uuid=%s, ssh_fp=%s, user=%s\n",
 		handle, uuid, ssh_fp, user);
 
-	url = get_capi_url(handle->ip, uuid);
+	url = get_capi_url(handle->url, uuid);
 	if (url == NULL)
 		goto out;
 	form_data = get_capi_form_data(ssh_fp, user);

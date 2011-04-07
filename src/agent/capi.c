@@ -74,6 +74,7 @@ get_curl_handle(capi_handle_t *handle, const char *url, const char *form_data)
 	curl_easy_setopt(curl, CURLOPT_URL, url);
 	curl_easy_setopt(curl, CURLOPT_USERPWD, handle->basic_auth_cred);
 	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curl_callback);
+	curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0);
 
 	return (curl);
 }

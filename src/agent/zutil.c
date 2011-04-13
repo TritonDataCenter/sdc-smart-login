@@ -237,7 +237,7 @@ get_owner_uuid(const char *zone)
 	handle = zonecfg_init_handle();
 
 	if ((err = zonecfg_get_handle(zone, handle)) != Z_OK) {
-		error("Unable to init zonecfg handle\n");
+		error("Unable to init zonecfg handle %s\n", zonecfg_strerror(err));
 		goto out;
 	}
 

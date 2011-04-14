@@ -1,63 +1,44 @@
+/* Copyright 2011 Joyent, Inc. */
+#include <errno.h>
 #include <sys/types.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+#include "config.h"
+#include "log.h"
+#include "util.h"
 
-#define LOG_OOM() fprintf(stderr, "Out of Memory @%s:%u\n", __FILE__, __LINE__)
-
-static const char *CFG_ENV_VAR = "SMARTLOGIN_CONFIG";
-static const char *CFG_CAPI_IP = "capi-ip";
-static const char *CFG_CAPI_LOGIN = "capi-login";
-static const char *CFG_CAPI_PW = "capi-pw";
-static const char *BASIC_AUTH = "%s:%s";
-
-char *g_capi_userpass = NULL;
-char *g_capi_ip = NULL;
-
-
-static void
-chomp(char *s) {
-	while(*s && *s != '\n' && *s != '\r') s++;
-	*s = 0;
-}
-
-static char *
-get_cfg_value(const char *key)
+char *
+read_cfg_key(const char *file, const char *key)
 {
 	boolean_t next_is_val = B_FALSE;
 	char buffer[BUFSIZ] = {0};
-	char *cfg_file = NULL;
 	char *rest = NULL;
-        char *token = NULL;
-        char *ptr = NULL;
+	char *token = NULL;
+	char *ptr = NULL;
 	char *val = NULL;
 	FILE *fp = NULL;
 
-	cfg_file = getenv(CFG_ENV_VAR);
-	if (cfg_file == NULL) {
-		fprintf(stderr, "%s env var not set\n", CFG_ENV_VAR);
-		exit(1);
+	if (file == NULL || key == NULL) {
+		debug("read_cfg_key: NULL arguments\n");
+		return (NULL);
 	}
 
-	fp = fopen(cfg_file, "r");
+	fp = fopen(file, "r");
 	if (fp == NULL) {
-		fprintf(stderr, "Couldn't open %s\n", cfg_file);
-		exit(1);
+		error("read_cfg_key: couldn't open %s: %s\n", file,
+			strerror(errno));
+		return (NULL);
 	}
 
 	while (fgets(buffer, sizeof (buffer), fp)) {
 		ptr = buffer;
-		while((token = strtok_r(ptr, "=", &rest)) != NULL) {
+		while ((token = strtok_r(ptr, "=", &rest)) != NULL) {
 			if (next_is_val) {
 				chomp(token);
-				val = strdup(token);
-				if (val == NULL)
-					LOG_OOM();
-				return val;
+				val = xstrdup(token);
+				goto out;
 			}
 
 			if (strcasecmp(key, token) == 0)
@@ -67,49 +48,12 @@ get_cfg_value(const char *key)
 		}
 	}
 
-	fclose(fp);
-	return NULL;
-}
-
-
-boolean_t
-read_config()
-{
-	boolean_t success = B_FALSE;
-	char *login = NULL;
-	char *pw = NULL;
-	int buf_len = 0;
-
-	login = get_cfg_value(CFG_CAPI_LOGIN);
-	pw = get_cfg_value(CFG_CAPI_PW);
-	g_capi_ip = get_cfg_value(CFG_CAPI_IP);
-
-	if (login == NULL || pw == NULL || g_capi_ip == NULL)
-		return (success);
-
-	buf_len = snprintf(NULL, 0, BASIC_AUTH, login, pw) + 1;
-	g_capi_userpass = (char *)calloc(1, buf_len);
-	if (g_capi_userpass == NULL) {
-		LOG_OOM();
-		goto out;
+out:
+	(void) fclose(fp);
+	if (strcmp(CFG_CAPI_PW, key) != 0) {
+		info("config param %s: %s\n", key, val);
+	} else {
+		info("config param %s: XXXXXXXXX\n", key);
 	}
-	snprintf(g_capi_userpass, buf_len, BASIC_AUTH, login, pw);
-
-	success = B_TRUE;
-
-  out:
-	if (login != NULL) {
-		free(login);
-		login = NULL;
-	}
-	if (pw != NULL) {
-		free(pw);
-		pw = NULL;
-	}
-
-	return (success);
+	return (val);
 }
-
-#ifdef __cplusplus
-}
-#endif

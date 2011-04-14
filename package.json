@@ -1,12 +1,10 @@
 {
   "name": "smartlogin",
   "description": "Joyent Zone User Authentication Agent",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "homepage": "https://hub.joyent.com/wiki/display/dev/Home",
   "author": "Joyent (joyent.com)",
-  "bin": { "smartlogin": "./bin/smartlogin",
-	   "notify-smartlogin": "./bin/notify-smartlogin"
-	 },
+  "bin": { "smartlogin-agent": "./bin/smartlogin" },
   "scripts": {
     "postactivate": "npm-scripts/postactivate.sh",
     "postdeactivate": "npm-scripts/postdeactivate.sh"

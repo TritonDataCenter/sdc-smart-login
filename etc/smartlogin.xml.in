@@ -14,16 +14,20 @@
       <service_fmri value="svc:/system/filesystem/local"/>
     </dependency>
 
+    <dependent name="smartlogin_zones" grouping="optional_all" restart_on="none">
+      <service_fmri value="svc:/system/zones:default" />
+    </dependent>
+
     <exec_method
       type="method"
       name="start"
-      exec="@@BASEDIR@@/bin/smartlogin &amp;"
+      exec="@@BASEDIR@@/bin/smartlogin-agent &amp;"
       timeout_seconds="10">
       <method_context>
         <method_credential user="root" group="staff"/>
         <method_environment>
-          <envvar name="ZDOOR_TRACE" value="65535"/>
           <envvar name="SMARTLOGIN_CONFIG" value="@@ETC_DIR@@/smartlogin.cfg"/>
+          <envvar name='LD_PRELOAD_32' value='/usr/lib/extendedFILE.so.1' />
         </method_environment>
       </method_context>
     </exec_method>

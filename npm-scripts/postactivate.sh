@@ -7,13 +7,24 @@ export MODULES=$npm_config_root
 export ETC_DIR=$npm_config_etc
 export SMF_DIR=$npm_config_smfdir
 export VERSION=$npm_package_version
-
+export CFG_FILE=$ETC_DIR/smartlogin.cfg
 
 source /lib/sdc/config.sh
 load_sdc_config
-echo "capi-ip=$CONFIG_capi_admin_ip" > $ETC_DIR/smartlogin.cfg
-echo "capi-login=$CONFIG_capi_admin_login" >> $ETC_DIR/smartlogin.cfg
-echo "capi-pw=$CONFIG_capi_admin_pw" >> $ETC_DIR/smartlogin.cfg
+
+if [ ! -f $CFG_FILE ];
+then
+    echo "capi-url=$CONFIG_capi_client_url" > $CFG_FILE
+    echo "capi-login=$CONFIG_capi_http_admin_user" >> $CFG_FILE
+    echo "capi-pw=$CONFIG_capi_http_admin_pw" >> $CFG_FILE
+    echo "capi-connect-timeout=1" >> $CFG_FILE
+    echo "capi-timeout=3" >> $CFG_FILE
+    echo "capi-retry-attempts=3" >> $CFG_FILE
+    echo "capi-retry-sleep=1" >> $CFG_FILE
+    echo "capi-recheck-denies=yes" >> $CFG_FILE
+    echo "capi-cache-size=1000" >> $CFG_FILE
+    echo "capi-cache-age=600" >> $CFG_FILE
+fi
 
 subfile () {
   IN=$1

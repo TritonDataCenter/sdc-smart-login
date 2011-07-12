@@ -10,6 +10,11 @@ BRANCH=$(git symbolic-ref HEAD | cut -d'/' -f3)
 DESCRIBE=$(git describe)
 BUILDSTAMP=`TZ=UTC date "+%Y%m%dT%H%M%SZ"`; export BUILDSTAMP
 PKG=${NAME}-${BRANCH}-${BUILDSTAMP}-${DESCRIBE}.tgz
-PUBLISH_LOCATION=/rpool/data/coal/live_147/agents/smartlogin/${BRANCH}/
+if [[ -z $PUBLISH_LOCATION ]]; then
+    PUBLISH_LOCATION=/rpool/data/coal/live_147/agents/smartlogin/${BRANCH}/
+fi
+if [[ `hostname` = 'bh1-autobuild' ]]; then
+    DO_PUBLISH=1;
+fi
 
 source $DIRNAME/publish.sh

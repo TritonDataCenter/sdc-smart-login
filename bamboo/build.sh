@@ -14,7 +14,7 @@ PKG=${NAME}-${BRANCH}-${BUILDSTAMP}-${DESCRIBE}.tgz
 if [[ $( echo $BRANCH | grep release) && -z $PUBLISH_LOCATION ]]; then
     releasedate=$(echo $BRANCH | cut -d '-' -f2)
     RELEASEDIR=${releasedate:0:4}-${releasedate:4:2}-${releasedate:6:2}
-    PUBLISH_LOCATION=/rpool/data/coal/releases/${RELEASEDIR}/deps/smartlogin/${BRANCH}/
+    PUBLISH_LOCATION=/rpool/data/coal/releases/${RELEASEDIR}/deps/agents/smartlogin/${BRANCH}/
 fi
 
 if [[ -z $PUBLISH_LOCATION ]]; then

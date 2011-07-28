@@ -1,12 +1,19 @@
-NAME=smartlogin
-TARBALL=smart-login.tgz
-VERSION=$(shell git describe --tags)
-VERSION=0.1
-BASEDIR=/opt
+# Smartlogin Makefile
+#
+# Notes:
+# - If "BUILDSTAMP" is defined the created package will be
+#   "smartlogin-$BUILDSTAMP.tgz", else the default "smartlogin.tgz".
+# - The "publish" target requires that "BITS_DIR" be defined. The
+#   target will then publish to "$BITS_DIR/smartlogin/".
+#
 
-ifeq ($(VERSION), "")
-	@echo "Use gmake"
+NAME=smartlogin
+ifeq ($(BUILDSTAMP),"")
+	TARBALL=smartlogin.tgz
+else
+	TARBALL=smartlogin-$(BUILDSTAMP).tgz
 endif
+
 
 CC	= gcc
 CCFLAGS	= -fPIC -g -Wall
@@ -57,8 +64,12 @@ $(TARBALL): ${AGENT} $(NPM_FILES)
 
 npm: $(TARBALL)
 
+publish: $(BITS_DIR)
+	mkdir -p $(BITS_DIR)/smartlogin
+	cp $(TARBALL) $(BITS_DIR)/smartlogin/
+
 clean:
-	-rm -rf bin .npm core $~ ${TARBALL} ${AGENT}
+	-rm -rf bin .npm core $~ smartlogin*.tgz ${AGENT}
 	find . -name *.o | xargs rm -f
 
 distclean: clean

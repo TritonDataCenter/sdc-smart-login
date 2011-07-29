@@ -1,18 +1,13 @@
 # Smartlogin Makefile
-#
-# Notes:
-# - If "BUILDSTAMP" is defined the created package will be
-#   "smartlogin-$BUILDSTAMP.tgz", else the default "smartlogin.tgz".
-# - The "publish" target requires that "BITS_DIR" be defined. The
-#   target will then publish to "$BITS_DIR/smartlogin/".
-#
 
 NAME=smartlogin
-ifeq ($(BUILDSTAMP),"")
-	TARBALL=smartlogin.tgz
-else
-	TARBALL=smartlogin-$(BUILDSTAMP).tgz
+BRANCH=$(shell git symbolic-ref HEAD | awk -F/ '{print $$3}')
+ifeq ($(TIMESTAMP),)
+	TIMESTAMP=$(shell TZ=UTC date "+%Y%m%dT%H%M%SZ")
 endif
+GITDESCRIBE=$(shell git describe --all --long --dirty | cut -d- -f3,4)
+
+TARBALL=$(NAME)-$(BRANCH)-$(TIMESTAMP)-$(GITDESCRIBE).tgz
 
 
 CC	= gcc
@@ -64,7 +59,13 @@ $(TARBALL): ${AGENT} $(NPM_FILES)
 
 npm: $(TARBALL)
 
+# The "publish" target requires that "BITS_DIR" be defined.
+# The target will then publish to "$BITS_DIR/smartlogin/".
 publish: $(BITS_DIR)
+	@if [[ -z "$(BITS_DIR)" ]]; then \
+		echo "error: 'BITS_DIR' must be set for 'publish' target"; \
+		exit 1; \
+	fi
 	mkdir -p $(BITS_DIR)/smartlogin
 	cp $(TARBALL) $(BITS_DIR)/smartlogin/
 

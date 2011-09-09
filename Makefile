@@ -1,12 +1,13 @@
 # Smartlogin Makefile
 
 NAME=smartlogin
-BRANCH=$(shell git symbolic-ref HEAD | awk -F/ '{print $$3}')
+# Need GNU awk for multi-char arg to "-F".
+AWK=$(shell (which gawk 2>/dev/null | grep -v "^no ") || which awk)
+BRANCH=$(shell git symbolic-ref HEAD | $(AWK) -F/ '{print $$3}')
 ifeq ($(TIMESTAMP),)
-	TIMESTAMP=$(shell TZ=UTC date "+%Y%m%dT%H%M%SZ")
+	TIMESTAMP=$(shell date -u "+%Y%m%dT%H%M%SZ")
 endif
-GITDESCRIBE=$(shell git describe --all --long --dirty | cut -d- -f3,4)
-
+GITDESCRIBE=g$(shell git describe --all --long --dirty | $(AWK) -F'-g' '{print $$NF}')
 TARBALL=$(NAME)-$(BRANCH)-$(TIMESTAMP)-$(GITDESCRIBE).tgz
 
 

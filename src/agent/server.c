@@ -5,7 +5,7 @@
  *  SMF service(s), and listens for any zone events (i.e., start/stop).
  *  If a zone is a "tenant" zone (which to this service means it has an
  *  owner_uuid attributee), it opens a door in that zone for SSH to
- *  contact for SSH key authorization.  It calls a new API on CAPI brock
+ *  contact for SSH key authorization.	It calls a new API on CAPI brock
  *  slapped in for me that checks whether a given ssh key fingerprint
  *  belongs to an account.  The daemon maintains an in-memory LRU cache
  *  (i.e., cache goes away if the service bounces).
@@ -268,7 +268,13 @@ _key_is_authorized(zdoor_cookie_t *cookie, char *argp, size_t argp_sz)
 	uuid = (const char *)cookie->zdc_biscuit;
 	debug("login attempt from zone=%s, owner=%s, user=%s, fp=%s\n",
 		cookie->zdc_zonename, uuid, name, fp);
-	allowed = user_allowed_in_capi(uuid, name, fp);
+	if (strcasecmp(name, "root") == 0 ||
+	    strcasecmp(name, "admin") == 0 ||
+	    strcasecmp(name, "node") == 0) {
+		allowed = user_allowed_in_capi(uuid, name, fp);
+	} else {
+		allowed = B_FALSE;
+	}
 	debug("allowed?=%s\n", allowed ? "true" : "false");
 
 	result = (zdoor_result_t *)xmalloc(sizeof (zdoor_result_t));

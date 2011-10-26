@@ -2,8 +2,7 @@
 
 DIR=`dirname $0`
 
-export BASEDIR=$npm_config_agent_root
-export MODULES=$npm_config_root
+export PREFIX=$npm_config_prefix 
 export ETC_DIR=$npm_config_etc
 export SMF_DIR=$npm_config_smfdir
 export VERSION=$npm_package_version
@@ -29,9 +28,8 @@ fi
 subfile () {
   IN=$1
   OUT=$2
-  sed -e "s#@@BASEDIR@@#$BASEDIR#g" \
+  sed -e "s#@@PREFIX@@#$PREFIX#g" \
       -e "s/@@VERSION@@/$VERSION/g" \
-      -e "s#@@MODULES@@#$MODULES#g" \
       -e "s#@@ETC_DIR@@#$ETC_DIR#g" \
       -e "s#@@SMFDIR@@#$SMFDIR#g"   \
       $IN > $OUT

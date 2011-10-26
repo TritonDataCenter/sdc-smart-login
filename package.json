@@ -6,7 +6,7 @@
   "author": "Joyent (joyent.com)",
   "bin": { "smartlogin-agent": "./bin/smartlogin" },
   "scripts": {
-    "postactivate": "npm-scripts/postactivate.sh",
-    "postdeactivate": "npm-scripts/postdeactivate.sh"
+    "postinstall": "npm-scripts/postinstall.sh",
+    "postuninstall": "npm-scripts/postuninstall.sh"
   }
 }

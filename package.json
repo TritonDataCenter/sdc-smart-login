@@ -1,7 +1,7 @@
 {
   "name": "smartlogin",
   "description": "Joyent Zone User Authentication Agent",
-  "version": "0.0.2",
+  "version": "0.1.0",
   "homepage": "https://hub.joyent.com/wiki/display/dev/Home",
   "author": "Joyent (joyent.com)",
   "bin": { "smartlogin-agent": "./bin/smartlogin" },

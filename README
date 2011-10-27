@@ -1,7 +1,7 @@
 What is this?
 -------------
 
-Smart login is the set of components that enable SSHd on customer zones to
+Smartlogin is the set of components that enable SSHd on customer zones to
 resolve public keys in CAPI.
 
 The agent is installed along with other agents, the plugin is included

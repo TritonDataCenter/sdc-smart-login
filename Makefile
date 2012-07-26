@@ -1,6 +1,8 @@
 # Smartlogin Makefile
 
 NAME=smartlogin
+TOP := $(shell pwd)
+
 # Need GNU awk for multi-char arg to "-F".
 AWK=$(shell (which gawk 2>/dev/null | grep -v "^no ") || which awk)
 BRANCH=$(shell git symbolic-ref HEAD | $(AWK) -F/ '{print $$3}')
@@ -12,7 +14,7 @@ TARBALL=$(NAME)-$(BRANCH)-$(TIMESTAMP)-$(GITDESCRIBE).tgz
 
 
 CC	= gcc
-CCFLAGS	= -fPIC -g -Wall
+CCFLAGS	= -fPIC -g -Wall -I$(TOP)/hack-platform-include
 LDFLAGS	= -L/lib -static-libgcc
 
 AGENT := ${NAME}

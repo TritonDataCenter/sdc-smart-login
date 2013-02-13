@@ -16,7 +16,6 @@ extern "C" {
  */
 typedef struct capi_handle {
 	char *url;
-	char *basic_auth_cred;
 	unsigned int connect_timeout;
 	unsigned int retries;
 	unsigned int retry_sleep;
@@ -29,12 +28,9 @@ typedef struct capi_handle {
  * Caller needs to read the params in out of config.
  *
  * @param url
- * @param user
- * @param pass
  * @return capi_handle_t
  */
-extern capi_handle_t *capi_handle_create(const char *url, const char *user,
-				const char*pass);
+extern capi_handle_t *capi_handle_create(const char *url);
 
 /**
  * Frees up memory associated to CAPI handle.

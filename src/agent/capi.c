@@ -65,14 +65,12 @@ get_curl_handle(capi_handle_t *handle, const char *url, const char *form_data)
 
 	curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, handle->connect_timeout);
 	curl_easy_setopt(curl, CURLOPT_DNS_CACHE_TIMEOUT, -1);
-	curl_easy_setopt(curl, CURLOPT_HTTPAUTH, (long)CURLAUTH_BASIC);
 	curl_easy_setopt(curl, CURLOPT_MAXREDIRS, 0);
 	curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 1L);
 	curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
 	curl_easy_setopt(curl, CURLOPT_POSTFIELDS, form_data);
 	curl_easy_setopt(curl, CURLOPT_TIMEOUT, handle->timeout);
 	curl_easy_setopt(curl, CURLOPT_URL, url);
-	curl_easy_setopt(curl, CURLOPT_USERPWD, handle->basic_auth_cred);
 	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curl_callback);
 	curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0);
 
@@ -81,17 +79,17 @@ get_curl_handle(capi_handle_t *handle, const char *url, const char *form_data)
 
 
 capi_handle_t *
-capi_handle_create(const char *url, const char *user, const char *pass)
+capi_handle_create(const char *url)
 {
 	capi_handle_t *handle = NULL;
 	int len = 0;
 
-	if (url == NULL || user == NULL || pass == NULL) {
+	if (url == NULL) {
 		debug2("capi_handle_create: NULL arguments\n");
 		return (NULL);
 	}
 
-	debug2("capi_handle_create: url=%s, user=%s, pass=%s\n", url, user, pass);
+	debug2("capi_handle_create: url=%s\n", url);
 
 	handle = xmalloc(sizeof (capi_handle_t));
 	if (handle == NULL)
@@ -108,14 +106,6 @@ capi_handle_create(const char *url, const char *user, const char *pass)
 		return (NULL);
 	}
 
-	len = snprintf(NULL, 0, BASIC_AUTH, user, pass) + 1;
-	handle->basic_auth_cred = xmalloc(len);
-	if (handle->basic_auth_cred == NULL) {
-		capi_handle_destroy(handle);
-		return (NULL);
-	}
-	(void) snprintf(handle->basic_auth_cred, len, BASIC_AUTH, user, pass);
-
 	debug2("capi_handle_create: returning %p\n", handle);
 	return (handle);
 }
@@ -127,7 +117,6 @@ capi_handle_destroy(capi_handle_t *handle)
 	debug2("capi_handle_destroy: handle=%p\n", handle);
 	if (handle != NULL) {
 		xfree(handle->url);
-		xfree(handle->basic_auth_cred);
 		xfree(handle);
 	}
 }

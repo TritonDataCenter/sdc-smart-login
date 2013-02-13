@@ -98,8 +98,6 @@ build_capi_handle_from_config(const char *file)
 {
 	/* required fields */
 	char *url = NULL;
-	char *login = NULL;
-	char *pw = NULL;
 
 	/* optional fields */
 	char *connect_timeout = NULL;
@@ -113,19 +111,7 @@ build_capi_handle_from_config(const char *file)
 		goto out;
 	}
 
-	login = read_cfg_key(file, CFG_CAPI_LOGIN);
-	if (login == NULL) {
-		error("%s is a required config param", CFG_CAPI_LOGIN);
-		goto out;
-	}
-
-	pw = read_cfg_key(file, CFG_CAPI_PW);
-	if (pw == NULL) {
-		error("%s is a required config param", CFG_CAPI_PW);
-		goto out;
-	}
-
-	g_capi_handle = capi_handle_create(url, login, pw);
+	g_capi_handle = capi_handle_create(url);
 	if (g_capi_handle == NULL) {
 		error("unable to create CAPI handle\n");
 		goto out;
@@ -149,8 +135,6 @@ build_capi_handle_from_config(const char *file)
 
 out:
 	xfree(url);
-	xfree(login);
-	xfree(pw);
 	xfree(connect_timeout);
 	xfree(retries);
 	xfree(retry_sleep);

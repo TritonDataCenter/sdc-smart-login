@@ -10,7 +10,6 @@
 #include "log.h"
 #include "util.h"
 
-static const char *BASIC_AUTH = "%s:%s";
 static const char *CAPI_URI = "%s/customers/%s/ssh_sessions";
 static const char *FORM_DATA = "fingerprint=%s&name=%s";
 
@@ -82,7 +81,6 @@ capi_handle_t *
 capi_handle_create(const char *url)
 {
 	capi_handle_t *handle = NULL;
-	int len = 0;
 
 	if (url == NULL) {
 		debug2("capi_handle_create: NULL arguments\n");

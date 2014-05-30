@@ -26,9 +26,9 @@
 #include <curl/curl.h>
 #include <curl/types.h>
 
+#include "bunyan.h"
 #include "capi.h"
 #include "config.h"
-#include "log.h"
 #include "lru.h"
 #include "util.h"
 #include "zutil.h"
@@ -107,13 +107,15 @@ build_capi_handle_from_config(const char *file)
 
 	url = read_cfg_key(file, CFG_CAPI_URL);
 	if (url == NULL) {
-		error("%s is a required config param", CFG_CAPI_URL);
+		bunyan_error("missing required config param",
+		    BUNYAN_STRING, "param", CFG_CAPI_URL,
+		    BUNYAN_NONE);
 		goto out;
 	}
 
 	g_capi_handle = capi_handle_create(url);
 	if (g_capi_handle == NULL) {
-		error("unable to create CAPI handle\n");
+		bunyan_error("unable to create CAPI handle", BUNYAN_NONE);
 		goto out;
 	}
 
@@ -152,7 +154,8 @@ user_allowed_in_capi(const char *uuid, const char *user, const char *fp)
 	time_t now = 0;
 
 	if (uuid == NULL || user == NULL || fp == NULL) {
-		debug("user_allowed_in_capi: NULL arguments\n");
+		bunyan_debug("user_allowed_in_capi: NULL arguments",
+		    BUNYAN_NONE);
 	}
 
 	cache_key = build_cache_key(uuid, user, fp);
@@ -160,17 +163,23 @@ user_allowed_in_capi(const char *uuid, const char *user, const char *fp)
 	(void) pthread_mutex_lock(&g_cache_lock);
 	cache_entry = (cache_entry_t *)lru_get(g_lru_cache, cache_key);
 	if (cache_entry != NULL) {
-		debug("cache hit: %p\n", cache_key);
+		int age;
+		bunyan_debug("cache hit",
+		    BUNYAN_STRING, "cache_key", cache_key,
+		    BUNYAN_NONE);
 		allowed = cache_entry->allowed;
 		now = time(0);
-		if ((now - cache_entry->ctime) >= g_cache_age) {
-			debug("cache entry expired, checking CAPI\n");
+		age = now - cache_entry->ctime;
+		if (age >= g_cache_age) {
+			bunyan_debug("cache entry expired, checking CAPI",
+			    BUNYAN_INT32, "cache_age", age,
+			    BUNYAN_NONE);
 		} else if (!allowed && g_recheck_denies) {
-			debug("cache deny, config says to check CAPI again\n");
+			bunyan_debug("cache deny, config says to check "
+			    "CAPI again", BUNYAN_NONE);
 		} else {
 			goto out;
 		}
-
 	}
 	cache_entry = NULL;
 	(void) pthread_mutex_unlock(&g_cache_lock);
@@ -218,12 +227,9 @@ _key_is_authorized(zdoor_cookie_t *cookie, char *argp, size_t argp_sz)
 	start = get_system_us();
 
 	if (cookie == NULL || argp == NULL || argp_sz == 0) {
-		error("zdoor arguments NULL\n");
+		bunyan_error("zdoor arguments NULL", BUNYAN_NONE);
 		return (NULL);
 	}
-
-	debug("_key_is_authorized entered: cookie=%p, argp=%s, argp_sz=%d\n",
-		cookie, argp, argp_sz);
 
 	ptr = argp;
 	while ((token = strtok_r(ptr, " ", &rest)) != NULL) {
@@ -242,7 +248,9 @@ _key_is_authorized(zdoor_cookie_t *cookie, char *argp, size_t argp_sz)
 				goto out;
 			break;
 		default:
-			error("processng %s\n", rest);
+			bunyan_error("processing",
+			    BUNYAN_STRING, "remainder", rest,
+			    BUNYAN_NONE);
 			goto out;
 			break;
 		}
@@ -250,8 +258,12 @@ _key_is_authorized(zdoor_cookie_t *cookie, char *argp, size_t argp_sz)
 	}
 
 	uuid = (const char *)cookie->zdc_biscuit;
-	debug("login attempt from zone=%s, owner=%s, user=%s, fp=%s\n",
-		cookie->zdc_zonename, uuid, name, fp);
+	bunyan_debug("login attempt",
+	    BUNYAN_STRING, "zone", cookie->zdc_zonename,
+	    BUNYAN_STRING, "uuid", uuid,
+	    BUNYAN_STRING, "user", name,
+	    BUNYAN_STRING, "ssh_fp", fp,
+	    BUNYAN_NONE);
 	if (strcasecmp(name, "root") == 0 ||
 	    strcasecmp(name, "admin") == 0 ||
 	    strcasecmp(name, "node") == 0) {
@@ -259,7 +271,9 @@ _key_is_authorized(zdoor_cookie_t *cookie, char *argp, size_t argp_sz)
 	} else {
 		allowed = B_FALSE;
 	}
-	debug("allowed?=%s\n", allowed ? "true" : "false");
+	bunyan_debug("login response",
+	    BUNYAN_BOOLEAN, "allowed", allowed,
+	    BUNYAN_NONE);
 
 	result = (zdoor_result_t *)xmalloc(sizeof (zdoor_result_t));
 	if (result == NULL)
@@ -275,8 +289,13 @@ _key_is_authorized(zdoor_cookie_t *cookie, char *argp, size_t argp_sz)
 	}
 out:
 	end = get_system_us();
-	info("key_authorized?=%s: uuid=%s, user=%s, fp=%s, timing(us)=%ld\n",
-		(allowed ? "yes" : "no"), uuid, name, fp, (end - start));
+	bunyan_info("_key_is_authorized end",
+	    BUNYAN_STRING, "authorized", (allowed ? "yes" : "no"),
+	    BUNYAN_STRING, "uuid", uuid,
+	    BUNYAN_STRING, "user", name,
+	    BUNYAN_STRING, "ssh_fp", fp,
+	    BUNYAN_INT32, "timing_us", (end - start),
+	    BUNYAN_NONE);
 
 	xfree(name);
 	xfree(fp);
@@ -301,16 +320,16 @@ main(int argc, char **argv)
 		case 'd':
 			switch (atoi(optarg)) {
 			case 0:
-				g_debug_level = 0;
+				bunyan_level(BUNYAN_INFO);
 				break;
 			case 1:
-				g_debug_level = 1;
+				bunyan_level(BUNYAN_DEBUG);
 				break;
 			case 2:
-				g_debug_level = 2;
+				bunyan_level(BUNYAN_TRACE);
 				break;
 			case 3:
-				g_debug_level = 2;
+				bunyan_level(BUNYAN_TRACE);
 				(void) setenv("ZDOOR_TRACE", "3", 1);
 				break;
 			default:
@@ -322,9 +341,10 @@ main(int argc, char **argv)
 			cfg_file = xstrdup(optarg);
 			break;
 		case 's':
-			g_debug_level = 0;
-			g_error_enabled = B_FALSE;
-			g_info_enabled = B_FALSE;
+			/*
+			 * Completely disable logging output:
+			 */
+			bunyan_level(100);
 			break;
 		default:
 			(void) fprintf(stderr, "USAGE: %s [OPTION]\n", argv[0]);
@@ -339,25 +359,27 @@ main(int argc, char **argv)
 	if (cfg_file == NULL) {
 		cfg_file = getenv(CFGFILE_ENV_VAR);
 		if (cfg_file == NULL) {
-			error("neither -f <file> nor %s were specified\n",
-				CFGFILE_ENV_VAR);
+			bunyan_fatal("no configuration file specified",
+			    BUNYAN_NONE);
 			exit(1);
 		}
 	}
 
 	build_capi_handle_from_config(cfg_file);
 	if (g_capi_handle == NULL) {
-		error("Unable to create CAPI handle from %s\n", cfg_file);
+		bunyan_fatal("Unable to create CAPI handle",
+		    BUNYAN_STRING, "config_file", cfg_file,
+		    BUNYAN_NONE);
 		exit(1);
 	}
 
 	build_lru_cache_from_config(cfg_file);
 	if (g_lru_cache == NULL) {
-		info("CAPI caching disabled\n");
+		bunyan_info("CAPI caching disabled", BUNYAN_NONE);
 	}
 
 	if (!register_zmon(KEY_SVC_NAME, _key_is_authorized)) {
-		error("FATAL: unable to setup zone monitoring\n");
+		bunyan_fatal("unable to setup zone monitoring", BUNYAN_NONE);
 		exit(1);
 	}
 
@@ -368,8 +390,9 @@ main(int argc, char **argv)
 		z = zones[++i];
 	}
 
-	info("smartlogin running...\n");
+	bunyan_info("smart-login started", BUNYAN_NONE);
 	(void) pause();
+	bunyan_info("smart-login shutting down", BUNYAN_NONE);
 
 	i = 0;
 	z = zones[0];

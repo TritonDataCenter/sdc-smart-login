@@ -1,4 +1,5 @@
-/* Copyright 2011 Joyent, Inc. */
+/* Copyright 2014 Joyent, Inc. */
+
 #include <errno.h>
 #include <libzonecfg.h>
 #include <pthread.h>
@@ -7,7 +8,7 @@
 #include <zdoor.h>
 #include <zone.h>
 
-#include "log.h"
+#include "bunyan.h"
 #include "util.h"
 #include "zutil.h"
 
@@ -52,12 +53,16 @@ zone_monitor(const char *zonename, zoneid_t zid, const char *newstate,
 {
 	if (strcmp("running", newstate) == 0) {
 		if (strcmp("ready", oldstate) == 0) {
-			debug("zone %s now running...\n", zonename);
+			bunyan_debug("zone_monitor: zone running",
+			    BUNYAN_STRING, "zone", zonename,
+			    BUNYAN_NONE);
 			(void) open_zdoor(zonename);
 		}
 	} else if (strcmp("shutting_down", newstate) == 0) {
 		if (strcmp("running", oldstate) == 0) {
-			debug("zone %s shutting down...\n", zonename);
+			bunyan_debug("zone_monitor: zone stopping",
+			    BUNYAN_STRING, "zone", zonename,
+			    BUNYAN_NONE);
 			(void) close_zdoor(zonename);
 		}
 	}
@@ -79,7 +84,9 @@ open_zdoor(const char *zone)
 	(void) pthread_mutex_lock(&g_zdoor_lock);
 
 	if (tfind(zone, &g_zdoor_tree, _tsearch_compare) != NULL) {
-		debug("%s already has an open zdoor\n", zone);
+		bunyan_debug("zone already has an open door",
+		    BUNYAN_STRING, "zone", zone,
+		    BUNYAN_NONE);
 		success = B_TRUE;
 		goto out;
 	}
@@ -89,11 +96,18 @@ open_zdoor(const char *zone)
 		if (zdoor_open(g_zdoor_handle, zone, g_zdoor_service_name,
 				owner, g_zdoor_callback) != ZDOOR_OK) {
 
-			debug("Failed to open %s in %s\n", g_zdoor_service_name,
-				zone);
+			bunyan_error("failed to open door to zone",
+			    BUNYAN_STRING, "service_name",
+			    g_zdoor_service_name,
+			    BUNYAN_STRING, "zone", zone,
+			    BUNYAN_NONE);
 			goto out;
 		} else {
-			debug("Opened %s in %s\n", g_zdoor_service_name, zone);
+			bunyan_debug("opened door",
+			    BUNYAN_STRING, "service_name",
+			    g_zdoor_service_name,
+			    BUNYAN_STRING, "zone", zone,
+			    BUNYAN_NONE);
 			entry = xstrdup(zone);
 			if (entry == NULL) {
 				zdoor_close(g_zdoor_handle, zone,
@@ -142,7 +156,7 @@ boolean_t
 register_zmon(const char *service_name, zdoor_callback callback)
 {
 	if (service_name == NULL || callback == NULL) {
-		error("register_zmon: NULL arguments\n");
+		bunyan_error("register_zmon: NULL arguments", BUNYAN_NONE);
 		return (B_FALSE);
 	}
 	g_zdoor_service_name = xstrdup(service_name);
@@ -153,7 +167,7 @@ register_zmon(const char *service_name, zdoor_callback callback)
 
 	g_zdoor_handle = zdoor_handle_init();
 	if (g_zdoor_handle == NULL) {
-		error("zdoor_handle_init failed\n");
+		bunyan_error("zdoor_handle_init failed", BUNYAN_NONE);
 		xfree(g_zdoor_service_name);
 		return (B_FALSE);
 	}
@@ -209,8 +223,10 @@ again:
 			continue;
 
 		if (getzonenamebyid(zids[i], buf, ZONENAME_MAX) < 0) {
-			error("getzonename for %ld failed: %s\n", zids[i],
-				strerror(errno));
+			bunyan_error("getzonename failed",
+			    BUNYAN_INT32, "zone", zids[i],
+			    BUNYAN_STRING, "error", strerror(errno),
+			    BUNYAN_NONE);
 		}
 
 		zones[j] = xstrdup(buf);
@@ -237,12 +253,16 @@ get_owner_uuid(const char *zone)
 	handle = zonecfg_init_handle();
 
 	if ((err = zonecfg_get_handle(zone, handle)) != Z_OK) {
-		error("Unable to init zonecfg handle %s\n", zonecfg_strerror(err));
+		bunyan_error("unable to init zonecfg handle",
+		    BUNYAN_STRING, "error", zonecfg_strerror(errno),
+		    BUNYAN_NONE);
 		goto out;
 	}
 
 	if ((err = zonecfg_setattrent(handle)) != Z_OK) {
-		error("zonecfg_setattrent: %s\n", zonecfg_strerror(err));
+		bunyan_error("unable to zonecfg_setattrent",
+		    BUNYAN_STRING, "error", zonecfg_strerror(errno),
+		    BUNYAN_NONE);
 		goto out;
 	}
 
@@ -251,8 +271,12 @@ get_owner_uuid(const char *zone)
 			continue;
 
 		if (strcasecmp("string", attrtab.zone_attr_type) != 0) {
-			error("zone_attr %s is of type %s (not string)\n",
-				attrtab.zone_attr_name, attrtab.zone_attr_type);
+			bunyan_error("zone_attr wrong type (not string)",
+			     BUNYAN_STRING, "attr_name",
+			     attrtab.zone_attr_name,
+			     BUNYAN_STRING, "attr_type",
+			     attrtab.zone_attr_type,
+			     BUNYAN_NONE);
 			continue;
 		}
 

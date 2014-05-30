@@ -1,7 +1,8 @@
-/* Copyright 2011 Joyent, Inc. */
+/* Copyright 2014 Joyent, Inc. */
+
 #include <assert.h>
 #include "list.h"
-#include "log.h"
+#include "bunyan.h"
 #include "util.h"
 
 list_handle_t *
@@ -24,7 +25,7 @@ list_node_create(void *data)
 	list_node_t *node = NULL;
 
 	if (data == NULL) {
-		debug2("list_node_create: NULL arguments\n");
+		bunyan_debug("list_node_create: NULL arguments", BUNYAN_NONE);
 		return (NULL);
 	}
 
@@ -32,7 +33,6 @@ list_node_create(void *data)
 	if (node != NULL)
 		node->data = data;
 
-	debug2("list_node_create: returning %p\n", node);
 	return (node);
 }
 
@@ -43,15 +43,14 @@ list_node_destroy(list_node_t *node)
 	void *ptr = NULL;
 
 	if (node == NULL) {
-		debug2("list_node_destroy: NULL arguments\n");
+		bunyan_debug("list_node_destroy: NULL arguments",
+		    BUNYAN_NONE);
 		return (NULL);
 	}
 
-	debug2("list_node_destroy: node=%p\n", node);
 	ptr = node->data;
 	xfree(node);
 
-	debug2("list_node_destroy: returning %p\n", ptr);
 	return (ptr);
 }
 
@@ -60,11 +59,9 @@ void
 list_push(list_handle_t *handle, list_node_t *node)
 {
 	if (handle == NULL || node == NULL) {
-		debug2("list_push: NULL arguments");
+		bunyan_debug("list_push: NULL arguments", BUNYAN_NONE);
 		return;
 	}
-
-	debug2("list_push: handle=%p, node=%p\n", handle, node);
 
 	if (handle->head == NULL) {
 		assert(handle->tail == NULL);
@@ -85,16 +82,13 @@ list_pop(list_handle_t *handle)
 	list_node_t *node = NULL;
 
 	if (handle == NULL) {
-		debug2("list_pop: NULL arguments\n");
+		bunyan_debug("list_pop: NULL arguments", BUNYAN_NONE);
 		return (NULL);
 	}
-
-	debug2("list_pop: handle=%p\n", handle);
 
 	node = handle->tail;
 	list_del(handle, handle->tail);
 
-	debug2("list_pop: returning node=%p\n", node);
 	return (node);
 }
 
@@ -103,11 +97,9 @@ void
 list_del(list_handle_t *handle, list_node_t *node)
 {
 	if (handle == NULL || node == NULL) {
-		debug2("list_del_node: NULL arguments\n");
+		bunyan_debug("list_del_node: NULL arguments", BUNYAN_NONE);
 		return;
 	}
-
-	debug2("list_del_node: handle=%p, node=%p\n", handle, node);
 
 	if (node->prev != NULL)
 		node->prev->next = node->next;

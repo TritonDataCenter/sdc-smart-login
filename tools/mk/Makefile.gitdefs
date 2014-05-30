@@ -1,0 +1,11 @@
+AWK = awk
+
+BRANCH := $(shell git symbolic-ref HEAD | $(AWK) -F/ '{print $$3}')
+
+ifeq ($(TIMESTAMP),)
+TIMESTAMP := $(shell date -u "+%Y%m%dT%H%M%SZ")
+endif
+
+_GITDESCRIBE := g$(shell git describe --all --long --dirty | $(AWK) -F'-g' '{print $$NF}')
+
+STAMP := $(BRANCH)-$(TIMESTAMP)-$(_GITDESCRIBE)

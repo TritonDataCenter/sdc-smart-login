@@ -14,17 +14,18 @@ TARBALL=$(NAME)-$(BRANCH)-$(TIMESTAMP)-$(GITDESCRIBE).tgz
 
 
 CC	= gcc
-CCFLAGS	= -fPIC -g -Wall -I$(TOP)/hack-platform-include
-LDFLAGS	= -L/lib -static-libgcc
+CCFLAGS	= -fPIC -g -Wall -Werror -I$(TOP)/hack-platform-include
+LDFLAGS	= -nodefaultlibs -L/lib -L/usr/lib -lc -lnvpair
 
 AGENT := ${NAME}
 AGENT_SRC = \
+	src/agent/bunyan.c 	\
 	src/agent/capi.c 	\
 	src/agent/config.c 	\
 	src/agent/hash.c 	\
 	src/agent/list.c	\
-	src/agent/log.c		\
 	src/agent/lru.c		\
+	src/agent/nvpair_json.c	\
 	src/agent/server.c	\
 	src/agent/util.c	\
 	src/agent/zutil.c
@@ -36,8 +37,9 @@ AGENT_LIBS = -lzdoor -lzonecfg /usr/lib/libcurl.so.4
 NPM_FILES =		\
 	bin		\
 	etc		\
-	npm-scripts	\
-	package.json
+	npm-scripts
+
+include ./tools/mk/Makefile.gitdefs
 
 .PHONY: all clean distclean npm
 
@@ -46,6 +48,10 @@ all:: npm
 ${AGENT}:
 	mkdir -p bin
 	${CC} ${CCFLAGS} ${LDFLAGS} -o bin/$@ $^ ${AGENT_SRC} ${AGENT_LIBS}
+	if /usr/bin/elfdump -d bin/$@ | egrep 'RUNPATH|RPATH'; then \
+		echo "Your compiler is inserting an errant RPATH/RUNPATH" >&2; \
+		exit 1; \
+	fi
 
 lint:
 	for file in ${AGENT_SRC} ; do \
@@ -54,10 +60,12 @@ lint:
 		echo "--------------------" ; \
 	done
 
-$(TARBALL): ${AGENT} $(NPM_FILES)
+$(TARBALL): ${AGENT} $(NPM_FILES) package.json
 	rm -fr .npm
 	mkdir -p .npm/$(NAME)/
 	cp -Pr $(NPM_FILES) .npm/$(NAME)/
+	json -f package.json -e 'this.version += "-$(STAMP)"' \
+	    > .npm/$(NAME)/package.json
 	cd .npm && gtar zcvf ../$(TARBALL) $(NAME)
 
 npm: $(TARBALL)

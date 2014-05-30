@@ -20,6 +20,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/time.h>
 
 #include <unistd.h>
 
@@ -46,7 +47,7 @@ static pthread_mutex_t g_cache_lock = PTHREAD_MUTEX_INITIALIZER;
 
 typedef struct cache_entry {
 	boolean_t allowed;
-	time_t ctime;
+	hrtime_t ctime;
 } cache_entry_t;
 
 static char *
@@ -151,7 +152,6 @@ user_allowed_in_capi(const char *uuid, const char *user, const char *fp)
 	cache_entry_t *cache_entry = NULL;
 	cache_entry_t *existing = NULL;
 	char *cache_key = NULL;
-	time_t now = 0;
 
 	if (uuid == NULL || user == NULL || fp == NULL) {
 		bunyan_debug("user_allowed_in_capi: NULL arguments",
@@ -168,8 +168,7 @@ user_allowed_in_capi(const char *uuid, const char *user, const char *fp)
 		    BUNYAN_STRING, "cache_key", cache_key,
 		    BUNYAN_NONE);
 		allowed = cache_entry->allowed;
-		now = time(0);
-		age = now - cache_entry->ctime;
+		age = HR_SEC(gethrtime() - cache_entry->ctime);
 		if (age >= g_cache_age) {
 			bunyan_debug("cache entry expired, checking CAPI",
 			    BUNYAN_INT32, "cache_age", age,
@@ -198,7 +197,7 @@ user_allowed_in_capi(const char *uuid, const char *user, const char *fp)
 	}
 
 	if (cache_entry != NULL) {
-		cache_entry->ctime = time(0);
+		cache_entry->ctime = gethrtime();
 		cache_entry->allowed = allowed;
 	}
 
@@ -221,10 +220,9 @@ _key_is_authorized(zdoor_cookie_t *cookie, char *argp, size_t argp_sz)
 	char *name = NULL;
 	char *fp = NULL;
 	const char *uuid = NULL;
-	long start = 0;
-	long end = 0;
+	hrtime_t start, end;
 
-	start = get_system_us();
+	start = gethrtime();
 
 	if (cookie == NULL || argp == NULL || argp_sz == 0) {
 		bunyan_error("zdoor arguments NULL", BUNYAN_NONE);
@@ -288,13 +286,13 @@ _key_is_authorized(zdoor_cookie_t *cookie, char *argp, size_t argp_sz)
 		result = NULL;
 	}
 out:
-	end = get_system_us();
+	end = gethrtime();
 	bunyan_info("_key_is_authorized end",
 	    BUNYAN_STRING, "authorized", (allowed ? "yes" : "no"),
 	    BUNYAN_STRING, "uuid", uuid,
 	    BUNYAN_STRING, "user", name,
 	    BUNYAN_STRING, "ssh_fp", fp,
-	    BUNYAN_INT32, "timing_us", (end - start),
+	    BUNYAN_INT32, "timing_us", HR_USEC(end - start),
 	    BUNYAN_NONE);
 
 	xfree(name);

@@ -1,4 +1,5 @@
-/* Copyright 2011 Joyent, Inc. */
+/* Copyright 2014 Joyent, Inc. */
+
 #include <string.h>
 #include <unistd.h>
 
@@ -6,8 +7,8 @@
 #include <curl/types.h>
 #include <curl/easy.h>
 
+#include "bunyan.h"
 #include "capi.h"
-#include "log.h"
 #include "util.h"
 
 static const char *CAPI_URI = "%s/customers/%s/ssh_sessions";
@@ -22,7 +23,6 @@ get_capi_url(const char *url, const char *uuid)
 	len = snprintf(NULL, 0, CAPI_URI, url, uuid) + 1;
 	buf = xmalloc(len);
 	if (buf == NULL) {
-		debug2("unable to allocate %d bytes for url\n", len);
 		return (NULL);
 	}
 	(void) snprintf(buf, len, CAPI_URI, url, uuid);
@@ -38,7 +38,6 @@ get_capi_form_data(const char *fp, const char *user)
 	len = snprintf(NULL, 0, FORM_DATA, fp, user) + 1;
 	buf = xmalloc(len);
 	if (buf == NULL) {
-		debug2("unable to allocate %d bytes for form_data\n", len);
 		return (NULL);
 	}
 	(void) snprintf(buf, len, FORM_DATA, fp, user);
@@ -83,11 +82,10 @@ capi_handle_create(const char *url)
 	capi_handle_t *handle = NULL;
 
 	if (url == NULL) {
-		debug2("capi_handle_create: NULL arguments\n");
+		bunyan_debug("capi_handle_create: NULL arguments",
+		    BUNYAN_NONE);
 		return (NULL);
 	}
-
-	debug2("capi_handle_create: url=%s\n", url);
 
 	handle = xmalloc(sizeof (capi_handle_t));
 	if (handle == NULL)
@@ -104,7 +102,6 @@ capi_handle_create(const char *url)
 		return (NULL);
 	}
 
-	debug2("capi_handle_create: returning %p\n", handle);
 	return (handle);
 }
 
@@ -112,7 +109,6 @@ capi_handle_create(const char *url)
 void
 capi_handle_destroy(capi_handle_t *handle)
 {
-	debug2("capi_handle_destroy: handle=%p\n", handle);
 	if (handle != NULL) {
 		xfree(handle->url);
 		xfree(handle);
@@ -135,11 +131,17 @@ capi_is_allowed(capi_handle_t *handle, const char *uuid,
 	long http_code = 0;
 
 	if (handle == NULL || uuid == NULL || ssh_fp == NULL || user == NULL) {
-		debug2("capi_is_allowed: NULL arguments\n");
+		bunyan_debug("capi_is_allowed: NULL arguments",
+		    BUNYAN_NONE);
 		return (B_FALSE);
 	}
-	debug("capi_is_allowed: handle=%p, uuid=%s, ssh_fp=%s, user=%s\n",
-		handle, uuid, ssh_fp, user);
+
+	bunyan_debug("capi_is_allowed",
+	    BUNYAN_POINTER, "handle", handle,
+	    BUNYAN_STRING, "uuid", uuid,
+	    BUNYAN_STRING, "ssh_fp", ssh_fp,
+	    BUNYAN_STRING, "user", user,
+	    BUNYAN_NONE);
 
 	url = get_capi_url(handle->url, uuid);
 	if (url == NULL)
@@ -153,26 +155,39 @@ capi_is_allowed(capi_handle_t *handle, const char *uuid,
 		goto out;
 
 	do {
-		debug2("capi_is_allowed: POSTing %s to %s\n", form_data, url);
 		start = get_system_us();
+
+		bunyan_trace("capi_is_allowed: POSTing",
+		    BUNYAN_STRING, "form_data", form_data,
+		    BUNYAN_STRING, "url", url,
+		    BUNYAN_NONE);
+
 		res = curl_easy_perform(curl);
 		end = get_system_us();
-		debug2("capi_is_allowed: reachable?=%s, timing(us)=%ld\n",
-			(res == 0 ? "yes" : "no"), (end - start));
+
+		bunyan_trace("capi_is_allowed request performed",
+		    BUNYAN_STRING, "reachable?", (res == 0 ? "yes" : "no"),
+		    BUNYAN_INT32, "timing_us", (end - start),
+		    BUNYAN_NONE);
 
 		if (res == 0)
 			break;
 
-		info("CAPI network error:  %d:%s\n", res,
-			curl_easy_strerror(res));
+		bunyan_info("CAPI network error",
+		    BUNYAN_INT32, "res", res,
+		    BUNYAN_STRING, "error", curl_easy_strerror(res),
+		    BUNYAN_NONE);
 
 		if (++attempts < handle->retries)
 			(void) sleep(handle->retry_sleep);
 	} while (attempts < handle->retries);
 
 	curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
-	debug2("capi_is_allowed: HTTP response code: %ld\n", http_code);
 	allowed = (http_code == 201 ? B_TRUE : B_FALSE);
+	bunyan_debug("capi_is_allowed HTTP response",
+	    BUNYAN_INT32, "http_code", http_code,
+	    BUNYAN_BOOLEAN, "allowed", allowed,
+	    BUNYAN_NONE);
 
 out:
 	xfree(url);
@@ -182,6 +197,9 @@ out:
 		curl = NULL;
 	}
 
-	debug("capi_is_allowed: returning %s\n", allowed ? "true" : "false");
+	bunyan_debug("capi_is_allowed return",
+	    BUNYAN_BOOLEAN, "allowed", allowed,
+	    BUNYAN_NONE);
+
 	return (allowed);
 }

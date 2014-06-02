@@ -1,4 +1,5 @@
-/* Copyright 2011 Joyent, Inc. */
+/* Copyright 2014 Joyent, Inc. */
+
 #ifndef UTIL_H_
 #define	UTIL_H_
 
@@ -7,6 +8,9 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+#define	__SENTINEL	__attribute__((sentinel))
+#define	__UNUSED	__attribute__((unused))
 
 /**
  * Simple wrapper over calloc

@@ -1,12 +1,13 @@
-/* Copyright 2011 Joyent, Inc. */
+/* Copyright 2014 Joyent, Inc. */
+
 #include <errno.h>
 #include <sys/types.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 
+#include "bunyan.h"
 #include "config.h"
-#include "log.h"
 #include "util.h"
 
 char *
@@ -21,14 +22,17 @@ read_cfg_key(const char *file, const char *key)
 	FILE *fp = NULL;
 
 	if (file == NULL || key == NULL) {
-		debug("read_cfg_key: NULL arguments\n");
+		bunyan_debug("read_cfg_key: NULL arguments",
+		    BUNYAN_NONE);
 		return (NULL);
 	}
 
 	fp = fopen(file, "r");
 	if (fp == NULL) {
-		error("read_cfg_key: couldn't open %s: %s\n", file,
-			strerror(errno));
+		bunyan_error("could not open config file",
+		    BUNYAN_STRING, "file", file,
+		    BUNYAN_STRING, "error", strerror(errno),
+		    BUNYAN_NONE);
 		return (NULL);
 	}
 
@@ -51,9 +55,14 @@ read_cfg_key(const char *file, const char *key)
 out:
 	(void) fclose(fp);
 	if (strcmp(CFG_CAPI_PW, key) != 0) {
-		info("config param %s: %s\n", key, val);
+		bunyan_info("config param",
+		    BUNYAN_STRING, "key", key,
+		    BUNYAN_STRING, "value", val,
+		    BUNYAN_NONE);
 	} else {
-		info("config param %s: XXXXXXXXX\n", key);
+		bunyan_info("config param",
+		    BUNYAN_STRING, "key", key,
+		    BUNYAN_NONE);
 	}
 	return (val);
 }

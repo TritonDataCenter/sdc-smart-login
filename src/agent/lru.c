@@ -1,6 +1,7 @@
-/* Copyright 2011 Joyent, Inc. */
+/* Copyright 2014 Joyent, Inc. */
+
 #include <assert.h>
-#include "log.h"
+#include "bunyan.h"
 #include "lru.h"
 #include "util.h"
 
@@ -47,7 +48,6 @@ lru_cache_create(size_t size)
 
 	lru = xmalloc(size);
 	if (lru == NULL) {
-		debug2("lru_cache_create: malloc failure\n");
 		return (NULL);
 	}
 
@@ -64,7 +64,6 @@ lru_cache_create(size_t size)
 		lru = NULL;
 	}
 
-	debug2("lru_cache_create: returning %p\n", lru);
 	return (lru);
 }
 
@@ -75,7 +74,6 @@ lru_cache_destroy(lru_cache_t *lru)
 	if (lru == NULL)
 		return;
 
-	debug2("lru_cache_destroy: lru=%p\n", lru);
 	list_destroy(lru->list);
 	hash_handle_destroy(lru->hash);
 	lru->count = 0;
@@ -92,14 +90,15 @@ lru_add(lru_cache_t *lru, const char *key, void *value)
 	void *existing_value = NULL;
 
 	if (lru == NULL || key == NULL || value == NULL) {
-		debug2("lru_add: NULL arguments\n");
+		bunyan_debug("lru_add: NULL arguments", BUNYAN_NONE);
 		return (value);
 	}
-	debug("lru_add: lru=%p, key=%s, value=%p\n", lru, key, value);
 
 	node = (list_node_t *)hash_get(lru->hash, key);
 	if (node != NULL) {
-		debug2("lru_add: %s already exists\n");
+		bunyan_trace("lru_add key already exists",
+		    BUNYAN_STRING, "key", key,
+		    BUNYAN_NONE);
 		goto out;
 	}
 
@@ -121,15 +120,16 @@ lru_add(lru_cache_t *lru, const char *key, void *value)
 		if (tmp != NULL) {
 			entry = (lru_entry_t *)tmp->data;
 			assert(entry != NULL);
-			debug("lru_add: at capacity(%d), evicting %s\n",
-				lru->size, entry->key);
+			bunyan_debug("lru_add: at capacity, evicting key",
+			    BUNYAN_INT32, "capacity", lru->size,
+			    BUNYAN_STRING, "key", key,
+			    BUNYAN_NONE);
 			hash_del(lru->hash, entry->key);
 			existing_value = lru_entry_destroy(entry);
 			list_node_destroy(tmp);
 		}
 	}
 out:
-	debug("lru_add: returning: %p\n", existing_value);
 	return (existing_value);
 }
 
@@ -142,13 +142,14 @@ lru_get(lru_cache_t *lru, const char *key)
 	void *value = NULL;
 
 	if (lru == NULL || key == NULL) {
-		debug2("lru_get: NULL arguments\n");
+		bunyan_debug("lru_get: NULL arguments", BUNYAN_NONE);
 	}
-	debug("lru_get: lru=%p, key=%s\n", lru, key);
 
 	node = (list_node_t *)hash_get(lru->hash, key);
 	if (node == NULL) {
-		debug2("lru_get: %s not in cache\n", key);
+		bunyan_debug("lru_get: key not in cache",
+		    BUNYAN_STRING, "key", key,
+		    BUNYAN_NONE);
 		goto out;
 	}
 
@@ -161,6 +162,5 @@ lru_get(lru_cache_t *lru, const char *key)
 	list_push(lru->list, node);
 
 out:
-	debug("lru_get: %s returning: \n", key, value);
 	return (value);
 }

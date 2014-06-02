@@ -1,8 +1,9 @@
-/* Copyright 2011 Joyent, Inc. */
+/* Copyright 2014 Joyent, Inc. */
+
 #include <stdlib.h>
 #include <string.h>
+#include <err.h>
 
-#include "log.h"
 #include "util.h"
 
 
@@ -15,8 +16,6 @@ xcalloc(size_t count, size_t sz)
 		return (NULL);
 
 	ptr = calloc(count, sz);
-	if (ptr == NULL)
-		error("Out of Memory (%d bytes)\n", sz * count);
 
 	return (ptr);
 }

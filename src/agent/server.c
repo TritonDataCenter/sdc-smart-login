@@ -258,7 +258,7 @@ _key_is_authorized(zdoor_cookie_t *cookie, char *argp, size_t argp_sz)
 	uuid = (const char *)cookie->zdc_biscuit;
 	bunyan_debug("login attempt",
 	    BUNYAN_STRING, "zone", cookie->zdc_zonename,
-	    BUNYAN_STRING, "uuid", uuid,
+	    BUNYAN_STRING, "owner", uuid,
 	    BUNYAN_STRING, "user", name,
 	    BUNYAN_STRING, "ssh_fp", fp,
 	    BUNYAN_NONE);
@@ -271,6 +271,10 @@ _key_is_authorized(zdoor_cookie_t *cookie, char *argp, size_t argp_sz)
 	}
 	bunyan_debug("login response",
 	    BUNYAN_BOOLEAN, "allowed", allowed,
+	    BUNYAN_STRING, "zone", cookie->zdc_zonename,
+	    BUNYAN_STRING, "owner", uuid,
+	    BUNYAN_STRING, "user", name,
+	    BUNYAN_STRING, "ssh_fp", fp,
 	    BUNYAN_NONE);
 
 	result = (zdoor_result_t *)xmalloc(sizeof (zdoor_result_t));
@@ -287,9 +291,10 @@ _key_is_authorized(zdoor_cookie_t *cookie, char *argp, size_t argp_sz)
 	}
 out:
 	end = gethrtime();
-	bunyan_info("_key_is_authorized end",
-	    BUNYAN_STRING, "authorized", (allowed ? "yes" : "no"),
-	    BUNYAN_STRING, "uuid", uuid,
+	bunyan_info("completed auth check",
+	    BUNYAN_STRING, "allowed", (allowed ? "yes" : "no"),
+	    BUNYAN_STRING, "zone", cookie->zdc_zonename,
+	    BUNYAN_STRING, "owner", uuid,
 	    BUNYAN_STRING, "user", name,
 	    BUNYAN_STRING, "ssh_fp", fp,
 	    BUNYAN_INT32, "timing_us", HR_USEC(end - start),

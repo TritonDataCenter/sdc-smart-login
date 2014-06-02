@@ -4,6 +4,7 @@
 #define	UTIL_H_
 
 #include <sys/types.h>
+#include <sys/time.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -11,6 +12,10 @@ extern "C" {
 
 #define	__SENTINEL	__attribute__((sentinel))
 #define	__UNUSED	__attribute__((unused))
+
+#define	HR_USEC(a)	((int)((a) / 1000LL))
+#define	HR_MSEC(a)	((int)((a) / 1000000LL))
+#define	HR_SEC(a)	((int)((a) / 1000000000LL))
 
 /**
  * Simple wrapper over calloc
@@ -48,13 +53,6 @@ extern void xfree(void *ptr);
  * @param s
  */
 extern void chomp(char *s);
-
-/**
- * Simple wrapper over gettimeofday()->tv_usec.
- *
- * @return current unix time in microseconds
- */
-extern long get_system_us();
 
 #ifdef __cplusplus
 }

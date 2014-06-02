@@ -58,11 +58,3 @@ chomp(char *s) {
 		s++;
 	*s = 0;
 }
-
-
-long
-get_system_us() {
-	struct timeval tp = {0};
-	(void) gettimeofday(&tp, NULL);
-	return (tp.tv_usec);
-}

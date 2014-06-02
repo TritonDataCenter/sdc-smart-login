@@ -2,6 +2,7 @@
 
 #include <string.h>
 #include <unistd.h>
+#include <sys/time.h>
 
 #include <curl/curl.h>
 #include <curl/types.h>
@@ -126,8 +127,7 @@ capi_is_allowed(capi_handle_t *handle, const char *uuid,
 	CURL *curl = NULL;
 	CURLcode res = 0;
 	int attempts = 0;
-	long start = 0;
-	long end = 0;
+	hrtime_t start, end;
 	long http_code = 0;
 
 	if (handle == NULL || uuid == NULL || ssh_fp == NULL || user == NULL) {
@@ -155,19 +155,18 @@ capi_is_allowed(capi_handle_t *handle, const char *uuid,
 		goto out;
 
 	do {
-		start = get_system_us();
-
 		bunyan_trace("capi_is_allowed: POSTing",
 		    BUNYAN_STRING, "form_data", form_data,
 		    BUNYAN_STRING, "url", url,
 		    BUNYAN_NONE);
 
+		start = gethrtime();
 		res = curl_easy_perform(curl);
-		end = get_system_us();
+		end = gethrtime();
 
 		bunyan_trace("capi_is_allowed request performed",
 		    BUNYAN_STRING, "reachable?", (res == 0 ? "yes" : "no"),
-		    BUNYAN_INT32, "timing_us", (end - start),
+		    BUNYAN_INT32, "timing_us", HR_USEC(end - start),
 		    BUNYAN_NONE);
 
 		if (res == 0)

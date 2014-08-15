@@ -10,7 +10,9 @@ ifeq ($(TIMESTAMP),)
 	TIMESTAMP=$(shell date -u "+%Y%m%dT%H%M%SZ")
 endif
 GITDESCRIBE=g$(shell git describe --all --long --dirty | $(AWK) -F'-g' '{print $$NF}')
-TARBALL=$(NAME)-$(BRANCH)-$(TIMESTAMP)-$(GITDESCRIBE).tgz
+BASE=$(NAME)-$(BRANCH)-$(TIMESTAMP)-$(GITDESCRIBE)
+TARBALL=$(BASE).tgz
+MANIFEST=$(BASE).manifest
 
 
 CC	= gcc
@@ -66,7 +68,17 @@ $(TARBALL): ${AGENT} $(NPM_FILES) package.json
 	cp -Pr $(NPM_FILES) .npm/$(NAME)/
 	json -f package.json -e 'this.version += "-$(STAMP)"' \
 	    > .npm/$(NAME)/package.json
-	cd .npm && gtar zcvf ../$(TARBALL) $(NAME)
+	(cd .npm && gtar zcvf ../$(TARBALL) $(NAME))
+	cat $(TOP)/manifest.tmpl | sed \
+		-e "s/UUID/$$(uuid -v4)/" \
+		-e "s/NAME/$$(json name < .npm/$(NAME)/package.json)/" \
+		-e "s/VERSION/$$(json version < .npm/$(NAME)/package.json)/" \
+		-e "s/DESCRIPTION/$$(json description < .npm/$(NAME)/package.json)/" \
+		-e "s/BUILDSTAMP/$(STAMP)/" \
+		-e "s/SIZE/$$(stat --printf="%s" $(TARBALL))/" \
+		-e "s/SHA/$$(openssl sha1 $(TARBALL) \
+		    | cut -d ' ' -f2)/" \
+		> $(MANIFEST)
 
 npm: $(TARBALL)
 
@@ -79,6 +91,7 @@ publish: $(BITS_DIR)
 	fi
 	mkdir -p $(BITS_DIR)/smartlogin
 	cp $(TARBALL) $(BITS_DIR)/smartlogin/
+	cp $(MANIFEST) $(BITS_DIR)/smartlogin/
 
 clean:
 	-rm -rf bin .npm core $~ smartlogin*.tgz ${AGENT}

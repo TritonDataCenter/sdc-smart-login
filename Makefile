@@ -66,11 +66,12 @@ $(TARBALL): ${AGENT} $(NPM_FILES) package.json
 	rm -fr .npm
 	mkdir -p .npm/$(NAME)/
 	cp -Pr $(NPM_FILES) .npm/$(NAME)/
+	uuid -v4 > .npm/$(NAME)/image_uuid
 	json -f package.json -e 'this.version += "-$(STAMP)"' \
 	    > .npm/$(NAME)/package.json
 	(cd .npm && gtar zcvf ../$(TARBALL) $(NAME))
 	cat $(TOP)/manifest.tmpl | sed \
-		-e "s/UUID/$$(uuid -v4)/" \
+		-e "s/UUID/$$(cat .npm/$(NAME)/image_uuid)/" \
 		-e "s/NAME/$$(json name < .npm/$(NAME)/package.json)/" \
 		-e "s/VERSION/$$(json version < .npm/$(NAME)/package.json)/" \
 		-e "s/DESCRIPTION/$$(json description < .npm/$(NAME)/package.json)/" \

@@ -4,9 +4,12 @@
   "version": "0.2.1",
   "homepage": "https://hub.joyent.com/wiki/display/dev/Home",
   "author": "Joyent (joyent.com)",
-  "bin": { "smartlogin-agent": "./bin/smartlogin" },
+  "bin": {
+    "smartlogin-agent": "./bin/smartlogin"
+  },
   "scripts": {
     "postinstall": "npm-scripts/postinstall.sh",
     "postuninstall": "npm-scripts/postuninstall.sh"
-  }
+  },
+  "license": "MPL-2.0"
 }

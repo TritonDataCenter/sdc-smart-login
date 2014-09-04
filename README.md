@@ -1,11 +1,20 @@
-This Source Code Form is subject to the terms of the Mozilla Public
-License, v. 2.0. If a copy of the MPL was not distributed with this
-file, You can obtain one at http://mozilla.org/MPL/2.0/.
+<!--
+    This Source Code Form is subject to the terms of the Mozilla Public
+    License, v. 2.0. If a copy of the MPL was not distributed with this
+    file, You can obtain one at http://mozilla.org/MPL/2.0/.
+-->
 
-Copyright (c) 2014, Joyent, Inc.
+<!--
+    Copyright (c) 2014, Joyent, Inc.
+-->
 
-What is this?
--------------
+# sdc-smart-login
+
+This repository is part of the Joyent SmartDataCenter project (SDC).  For 
+contribution guidelines, issues, and general documentation, visit the main
+[SDC](http://github.com/joyent/sdc) project page.
+
+## Overview
 
 Smartlogin is the set of components that enable SSHd on customer zones to
 resolve public keys in CAPI.
@@ -18,10 +27,7 @@ A few key tidbites:
 - The agent assumes the OS has libzdoor and libsmartsshd laid down
 - The SMF service makes zones a dependent of this package
 
-For more information: https://hub.joyent.com/wiki/display/dev/SmartLogin
-
-Internals
----------
+## Internals
 
 The agent runs as a standalone daemon (note, it doesn't actually fork, it
 just lets SMF do all that), and is essentially a proxy over CAPI.  It maintains

@@ -8,10 +8,10 @@
     Copyright (c) 2014, Joyent, Inc.
 -->
 
-# SDC Smartlogin
+# SDC Smart Login
 
-Smartlogin is the set of components that enable SSHd on customer zones to
-resolve public keys in CAPI.
+Smart Login enables using any public key in a user's account to SSH into 
+their zones.
 
 This repository is part of the SmartDataCenter (SDC) project. For
 contribution guidelines, issues, and general documentation, visit the
@@ -19,7 +19,10 @@ contribution guidelines, issues, and general documentation, visit the
 
 ## Overview
 
-The agent is installed along with other agents, the plugin is included
+Smart Login is the set of components that enable [sshd](https://www.illumos.org/man/1M/sshd)
+on user zones to resolve public keys in [CAPI](https://github.com/joyent/sdc-ufds).
+
+The agent is installed along with other agents. The plugin is included
 as part of dataset packaging.
 
 A few key tidbites:
@@ -34,13 +37,13 @@ just lets SMF do all that), and is essentially a proxy over CAPI. It maintains
 a configurable in-memory O(1) LRU cache (cache is hand rolled) for CAPI calls,
 and has a "refresh" TTL (i.e., if an entry is expired we attempt to replace it,
 but we don't actually evict it). The only other interesting bit is the fact
-that we have to maintain our own zone_monitor to account for zones being
+that we have to maintain our own "zone_monitor" to account for zones being
 provisioned/de-provisioned on the box (libzdoor monitors an existing zdoor
 for reboots, but doesn't take any action in new/destroyed zones).
 
-The package gets built into the agents shar with everything else.
+The package gets built into the agents shar with the other agents.
 
 ## License
 
-SDC Smartlogin is licensed under the
+SDC Smart Login is licensed under the
 [Mozilla Public License version 2.0](http://mozilla.org/MPL/2.0/).

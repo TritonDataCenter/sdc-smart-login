@@ -12,6 +12,7 @@
 set -o xtrace
 
 ROOT=$(cd `dirname $0`/../ 2>/dev/null && pwd)
+DIR=`dirname $0`
 
 export PREFIX=$npm_config_prefix 
 export ETC_DIR=$npm_config_etc
@@ -69,7 +70,7 @@ subfile () {
 
 function import_smf_manifest()
 {
-    subfile "$ROOT/smf/manifests/$AGENT.xml.in" "$SMF_DIR/$AGENT.xml"
+    subfile "$DIR/../etc/smartlogin.xml.in" "$SMF_DIR/smartlogin.xml"
 
     svccfg import $SMF_DIR/$AGENT.xml
 

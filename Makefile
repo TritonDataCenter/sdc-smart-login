@@ -5,7 +5,7 @@
 #
 
 #
-# Copyright (c) 2014, Joyent, Inc.
+# Copyright (c) 2019, Joyent, Inc.
 #
 
 # Smartlogin Makefile
@@ -13,17 +13,19 @@
 NAME=smartlogin
 TOP := $(shell pwd)
 
-# Need GNU awk for multi-char arg to "-F".
-AWK=$(shell (which gawk 2>/dev/null | grep -v "^no ") || which awk)
-BRANCH=$(shell git symbolic-ref HEAD | $(AWK) -F/ '{print $$3}')
-ifeq ($(TIMESTAMP),)
-	TIMESTAMP=$(shell date -u "+%Y%m%dT%H%M%SZ")
-endif
-GITDESCRIBE=g$(shell git describe --all --long --dirty | $(AWK) -F'-g' '{print $$NF}')
-BASE=$(NAME)-$(BRANCH)-$(TIMESTAMP)-$(GITDESCRIBE)
+ENGBLD_REQUIRE := $(shell git submodule update --init deps/eng)
+include ./deps/eng/tools/mk/Makefile.defs
+TOP ?= $(error Unable to access eng.git submodule Makefiles.)
+
+# While this component doesn't require a base image, we set this so
+# that validate-buildenv can determine whether we're building on
+# smartos 1.6.3, currently a requirement.
+BASE_IMAGE_UUID=fd2cc906-8938-11e3-beab-4359c665ac99
+
+
+BASE=$(NAME)-$(STAMP)
 TARBALL=$(BASE).tgz
 MANIFEST=$(BASE).manifest
-
 
 CC	= gcc
 CCFLAGS	= -fPIC -g -Wall -Werror -I$(TOP)/hack-platform-include
@@ -51,11 +53,10 @@ NPM_FILES =		\
 	etc		\
 	npm-scripts
 
-include ./tools/mk/Makefile.gitdefs
+CLEAN_FILES += bin .npm core $~ smartlogin*.tgz smartlogin*.manifest ${AGENT}
 
-.PHONY: all clean distclean npm
-
-all:: npm
+.PHONY: all clean npm
+all: npm
 
 ${AGENT}:
 	mkdir -p bin
@@ -72,6 +73,9 @@ lint:
 		echo "--------------------" ; \
 	done
 
+$(NPM_FILES):
+	mkdir -p $@
+
 $(TARBALL): ${AGENT} $(NPM_FILES) package.json
 	rm -fr .npm
 	mkdir -p .npm/$(NAME)/
@@ -79,7 +83,7 @@ $(TARBALL): ${AGENT} $(NPM_FILES) package.json
 	uuid -v4 > .npm/$(NAME)/image_uuid
 	json -f package.json -e 'this.version += "-$(STAMP)"' \
 	    > .npm/$(NAME)/package.json
-	(cd .npm && gtar zcvf ../$(TARBALL) $(NAME))
+	(cd .npm && gtar -I pigz -cvf ../$(TARBALL) $(NAME))
 	cat $(TOP)/manifest.tmpl | sed \
 		-e "s/UUID/$$(cat .npm/$(NAME)/image_uuid)/" \
 		-e "s/NAME/$$(json name < .npm/$(NAME)/package.json)/" \
@@ -93,19 +97,12 @@ $(TARBALL): ${AGENT} $(NPM_FILES) package.json
 
 npm: $(TARBALL)
 
-# The "publish" target requires that "BITS_DIR" be defined.
-# The target will then publish to "$BITS_DIR/smartlogin/".
-publish: $(BITS_DIR)
-	@if [[ -z "$(BITS_DIR)" ]]; then \
-		echo "error: 'BITS_DIR' must be set for 'publish' target"; \
-		exit 1; \
-	fi
-	mkdir -p $(BITS_DIR)/smartlogin
-	cp $(TARBALL) $(BITS_DIR)/smartlogin/
-	cp $(MANIFEST) $(BITS_DIR)/smartlogin/
+publish:
+	mkdir -p $(ENGBLD_BITS_DIR)/smartlogin
+	cp $(TARBALL) $(ENGBLD_BITS_DIR)/smartlogin/
+	cp $(MANIFEST) $(ENGBLD_BITS_DIR)/smartlogin/
 
-clean:
-	-rm -rf bin .npm core $~ smartlogin*.tgz ${AGENT}
+clean::
 	find . -name *.o | xargs rm -f
 
-distclean: clean
+include ./deps/eng/tools/mk/Makefile.targ

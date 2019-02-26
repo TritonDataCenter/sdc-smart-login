@@ -1,0 +1,3 @@
+[submodule "deps/eng"]
+	path = deps/eng
+	url = git@github.com:joyent/eng.git

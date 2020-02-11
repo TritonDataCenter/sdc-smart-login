@@ -394,6 +394,7 @@ bunyan_nvlist_print_json(FILE *fp, nvlist_t *nvl)
 		}
 
 		case DATA_TYPE_UNKNOWN:
+		case DATA_TYPE_DONTCARE:
 			return (-1);
 		}
 	}

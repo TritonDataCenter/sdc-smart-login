@@ -5,33 +5,38 @@
 #
 
 #
-# Copyright (c) 2019, Joyent, Inc.
+# Copyright 2020 Joyent, Inc.
 #
 
-# Smartlogin Makefile
+#
+# For historical reasons*, this is dependent upon platform bits such as libcurl
+# and libzdoor, but instead of being compiled in that context, it's done
+# separately, using pkgsrc compilers, and exciting things like
+# "hack-platform-include".  Hold onto your hat.
+#
 
 NAME=smartlogin
 TOP := $(shell pwd)
 
 ENGBLD_REQUIRE := $(shell git submodule update --init deps/eng)
 include ./deps/eng/tools/mk/Makefile.defs
+include ./deps/eng/tools/mk/Makefile.ctf.defs
 TOP ?= $(error Unable to access eng.git submodule Makefiles.)
 
 # While this component doesn't require a base image, we set this so
-# that validate-buildenv can determine whether we're building on
-# smartos 1.6.3, currently a requirement.
-BASE_IMAGE_UUID=fd2cc906-8938-11e3-beab-4359c665ac99
+# that validate-buildenv can determine the correct build image, aka
+# triton-origin-x86_64-18.4.0
+BASE_IMAGE_UUID = a9368831-958e-432d-a031-f8ce6768d190
 
 
 BASE=$(NAME)-$(STAMP)
 TARBALL=$(BASE).tgz
 MANIFEST=$(BASE).manifest
 
-CC	= gcc
+CC	= gcc -m32
 CCFLAGS	= -fPIC -g -Wall -Werror -I$(TOP)/hack-platform-include
-LDFLAGS	= -nodefaultlibs -L/lib -L/usr/lib -lc -lnvpair
 
-AGENT := ${NAME}
+AGENT := bin/$(NAME)
 AGENT_SRC = \
 	src/agent/bunyan.c 	\
 	src/agent/capi.c 	\
@@ -44,34 +49,27 @@ AGENT_SRC = \
 	src/agent/util.c	\
 	src/agent/zutil.c
 
-# ARG! Some versions of solaris have curl 3, some curl 4,
-# so pick up the specific version
-AGENT_LIBS = -lzdoor -lzonecfg /usr/lib/libcurl.so.4
+AGENT_LIBS = /usr/lib/libcurl.so.4 -lnvpair -lzdoor -lzonecfg -lc
 
 NPM_FILES =		\
 	bin		\
 	etc		\
 	npm-scripts
 
-CLEAN_FILES += bin .npm core $~ smartlogin*.tgz smartlogin*.manifest ${AGENT}
+CLEAN_FILES += bin .npm core $~ smartlogin*.tgz smartlogin*.manifest $(AGENT)
 
 .PHONY: all clean npm
-all: npm
+all: $(TARBALL)
 
-${AGENT}:
+#
+# We're using the pkgsrc GCC; edit out the gcc libs RUNPATH entry, as
+# they wouldn't apply to the resulting system anyway.
+#
+${AGENT}: $(AGENT_SRC) $(STAMP_CTF_TOOLS)
 	mkdir -p bin
-	${CC} ${CCFLAGS} ${LDFLAGS} -o bin/$@ $^ ${AGENT_SRC} ${AGENT_LIBS}
-	if /usr/bin/elfdump -d bin/$@ | egrep 'RUNPATH|RPATH'; then \
-		echo "Your compiler is inserting an errant RPATH/RUNPATH" >&2; \
-		exit 1; \
-	fi
-
-lint:
-	for file in ${AGENT_SRC} ; do \
-		echo $$file ; \
-		lint -Isrc/agent -uaxm -m64 $$file ;  \
-		echo "--------------------" ; \
-	done
+	$(CC) $(CCFLAGS) $(LDFLAGS) -o $@ $(AGENT_SRC) ${AGENT_LIBS}
+	/usr/bin/elfedit -e 'dyn:delete RUNPATH' $@
+	$(CTFCONVERT) $@
 
 $(NPM_FILES):
 	mkdir -p $@
@@ -95,8 +93,6 @@ $(TARBALL): ${AGENT} $(NPM_FILES) package.json
 		    | cut -d ' ' -f2)/" \
 		> $(MANIFEST)
 
-npm: $(TARBALL)
-
 publish:
 	mkdir -p $(ENGBLD_BITS_DIR)/smartlogin
 	cp $(TARBALL) $(ENGBLD_BITS_DIR)/smartlogin/
@@ -106,3 +102,4 @@ clean::
 	find . -name *.o | xargs rm -f
 
 include ./deps/eng/tools/mk/Makefile.targ
+include ./deps/eng/tools/mk/Makefile.ctf.targ

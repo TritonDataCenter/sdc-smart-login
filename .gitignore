@@ -1,3 +1,6 @@
+bits
+cache
+make_stamps
 bin
 lib
 .npm

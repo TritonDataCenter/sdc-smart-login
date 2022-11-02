@@ -6,13 +6,14 @@
 
 <!--
     Copyright (c) 2014, Joyent, Inc.
+    Copyright 2022 MNX Cloud, Inc.
 -->
 
 # sdc-smart-login
 
-This repository is part of the Joyent SmartDataCenter project (SDC).  For 
+This repository is part of the Joyent SmartDataCenter project (SDC).  For
 contribution guidelines, issues, and general documentation, visit the main
-[SDC](http://github.com/joyent/sdc) project page.
+[SDC](http://github.com/TritonDataCenter/sdc) project page.
 
 ## Overview
 

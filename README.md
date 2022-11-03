@@ -11,9 +11,9 @@
 
 # sdc-smart-login
 
-This repository is part of the Joyent SmartDataCenter project (SDC).  For
+This repository is part of the Triton Data Center project (Triton).  For
 contribution guidelines, issues, and general documentation, visit the main
-[SDC](http://github.com/TritonDataCenter/sdc) project page.
+[Triton](http://github.com/TritonDataCenter/triton) project page.
 
 ## Overview
 

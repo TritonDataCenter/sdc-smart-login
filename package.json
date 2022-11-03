@@ -1,9 +1,9 @@
 {
   "name": "smartlogin",
-  "description": "Joyent Zone User Authentication Agent",
+  "description": "Triton Zone User Authentication Agent",
   "version": "0.2.2",
-  "homepage": "http://github.com/TritonDataCenter/sdc",
-  "author": "Joyent (joyent.com)",
+  "homepage": "http://github.com/TritonDataCenter/triton",
+  "author": "MNX Cloud (mnx.io)",
   "bin": {
     "smartlogin-agent": "./bin/smartlogin"
   },
